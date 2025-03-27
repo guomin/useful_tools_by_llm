@@ -42,7 +42,7 @@
             gap: 10px;
             align-items: center;
         }
-        input, select, button {
+        input, select, button, textarea {
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
@@ -103,15 +103,68 @@
             margin: 10px 0;
             font-weight: bold;
         }
+        .tab-buttons {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background: #f1f1f1;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        .tab-button.active {
+            background: #4CAF50;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        #paste-area {
+            width: 100%;
+            min-height: 100px;
+            margin-bottom: 10px;
+        }
+        .paste-example {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>CSV/TSV查看器</h1>
         
-        <div id="drop-area" class="drop-area">
-            <p>拖放CSV或TSV文件到此处，或点击选择文件</p>
-            <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+        <div class="tab-buttons">
+            <button class="tab-button active" data-tab="file-tab">文件导入</button>
+            <button class="tab-button" data-tab="paste-tab">粘贴文本</button>
+        </div>
+        
+        <div id="file-tab" class="tab-content active">
+            <div id="drop-area" class="drop-area">
+                <p>拖放CSV或TSV文件到此处，或点击选择文件</p>
+                <input type="file" id="fileInput" accept=".csv,.tsv,.txt">
+            </div>
+        </div>
+        
+        <div id="paste-tab" class="tab-content">
+            <textarea id="paste-area" placeholder="请在此粘贴CSV或TSV格式的文本..."></textarea>
+            <div class="paste-example">示例: 
+                <code>Name,Age,City
+John,30,New York
+Alice,25,London</code> 或 
+                <code>Name    Age    City
+John    30    New York
+Alice    25    London</code>
+            </div>
+            <button id="parsePasteBtn">解析粘贴内容</button>
         </div>
         
         <div class="controls">
@@ -166,8 +219,12 @@
         const resetBtn = document.getElementById('resetBtn');
         const dataTable = document.getElementById('dataTable');
         const statusDiv = document.getElementById('status');
-        const resultsInfo = document.getElementById('resultsInfo');
+        const resultsInfo = document.getElementById('results-info');
         const columnSelectorContainer = document.getElementById('column-selector-container');
+        const pasteArea = document.getElementById('paste-area');
+        const parsePasteBtn = document.getElementById('parsePasteBtn');
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
         
         // 事件监听器
         dropArea.addEventListener('dragover', (e) => {
@@ -197,11 +254,27 @@
         
         searchBtn.addEventListener('click', performSearch);
         resetBtn.addEventListener('click', resetView);
+        parsePasteBtn.addEventListener('click', parsePastedText);
         
         searchTerm.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performSearch();
             }
+        });
+        
+        // 标签页切换
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabId = button.getAttribute('data-tab');
+                
+                // 更新按钮状态
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                
+                // 更新内容区域
+                tabContents.forEach(content => content.classList.remove('active'));
+                document.getElementById(tabId).classList.add('active');
+            });
         });
         
         // 处理文件选择
@@ -225,6 +298,23 @@
             reader.readAsText(file);
         }
         
+        // 处理粘贴的文本
+        function parsePastedText() {
+            const content = pasteArea.value.trim();
+            
+            if (!content) {
+                updateStatus('请先粘贴CSV或TSV格式的文本', 'error');
+                return;
+            }
+            
+            try {
+                parseCSV(content);
+                updateStatus('成功解析粘贴的文本', 'success');
+            } catch (error) {
+                updateStatus(`解析错误: ${error.message}`, 'error');
+            }
+        }
+        
         // 解析CSV/TSV
         function parseCSV(content) {
             // 确定分隔符
@@ -233,8 +323,9 @@
             
             if (delimiterChoice === 'auto') {
                 // 自动检测: 统计逗号和制表符的数量，选择出现次数多的
-                const commaCount = content.split(',').length;
-                const tabCount = content.split('\t').length;
+                const firstLine = content.split(/\r?\n/)[0];
+                const commaCount = firstLine.split(',').length;
+                const tabCount = firstLine.split('\t').length;
                 delimiter = tabCount > commaCount ? '\t' : ',';
             } else if (delimiterChoice === 'tab') {
                 delimiter = '\t';
@@ -246,7 +337,7 @@
             const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
             
             if (lines.length === 0) {
-                throw new Error('文件为空或格式不正确');
+                throw new Error('内容为空或格式不正确');
             }
             
             // 获取表头
