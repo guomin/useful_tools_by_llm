@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-bottom: 20px;
+            font-family: monospace;
+        }
+        #svg-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ccc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+        }
+        #svg-container svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<h1>SVG Viewer</h1>
+<p>Paste your SVG code below to preview it:</p>
+
+<textarea id="svg-input" placeholder="Paste your SVG code here..."></textarea>
+<button onclick="previewSVG()">Preview SVG</button>
+
+<div id="svg-container">
+    <!-- SVG will be rendered here -->
+</div>
+
+<script>
+    function previewSVG() {
+        const svgInput = document.getElementById('svg-input').value;
+        const svgContainer = document.getElementById('svg-container');
+        
+        // Clear previous SVG
+        svgContainer.innerHTML = '';
+
+        try {
+            // Create a new DOMParser instance
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgInput, 'image/svg+xml');
+
+            // Check if the parsed document contains any parsing errors
+            if (svgDoc.querySelector('parsererror')) {
+                throw new Error('Invalid SVG code');
+            }
+
+            // Append the parsed SVG to the container
+            svgContainer.appendChild(svgDoc.documentElement);
+        } catch (error) {
+            svgContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+        }
+    }
+</script>
+
+</body>
+</html>

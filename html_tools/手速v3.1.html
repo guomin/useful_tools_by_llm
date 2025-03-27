@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打字速度训练 v3.1</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            height: 80vh; /* 固定高度 */
+            overflow-y: auto; /* 垂直滚动条 */
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .text-area {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            resize: none;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .typing-area {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            resize: none;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .stats {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 18px;
+            color: #333;
+        }
+        .completion-message {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 24px;
+            color: #28a745;
+            display: none;
+        }
+        .practice-line {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #333;
+        }
+        .correct {
+            color: green;
+        }
+        .incorrect {
+            color: red;
+        }
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .controls input {
+            width: 50px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>打字速度训练 v3.1</h1>
+        <div>
+            <textarea id="practiceText" class="text-area" placeholder="在这里输入或修改练习文本..." oninput="updateCharCount()"></textarea>
+            <span id="charCount">字符数: 0</span>
+        </div>
+        <div class="controls">
+            <label for="lineLength">每行字数:</label>
+            <input type="number" id="lineLength" value="30" min="25" oninput="updateLineLength()">
+        </div>
+        <button onclick="generateLines()">生成练习行</button>
+        <div id="practiceLines"></div>
+        <div class="stats" id="stats">打字速度: 0 WPM </div>
+        <div class="completion-message" id="completionMessage">完成！</div>
+        <button onclick="restart()">重新开始</button>
+    </div>
+
+    <script>
+        let startTime = null;
+        let wordCount = 0;
+        let errorCount = 0;
+        let practiceLines = [];
+        let lineLength = 30;
+
+        function startTimer() {
+            startTime = new Date();
+        }
+
+        function stopTimer() {
+            const endTime = new Date();
+            const timeDiff = (endTime - startTime) / 1000; // 时间差，单位为秒
+            const minutes = timeDiff / 60; // 时间差，单位为分钟
+            const wpm = Math.round((wordCount / minutes) || 0); // 计算每分钟的打字速度
+            document.getElementById('stats').innerText = 
+                `打字速度: ${wpm} WPM\n字数：${wordCount}\n耗时: ${Math.round(timeDiff)} 秒`;
+        }
+
+        function clearText() {
+            document.getElementById('practiceText').value = '';
+            document.getElementById('practiceLines').innerHTML = '';
+            wordCount = 0;
+            errorCount = 0;
+            document.getElementById('stats').innerText = '打字速度: 0 WPM';
+            document.getElementById('completionMessage').style.display = 'none';
+            updateCharCount();
+        }
+
+        function restart() {
+            clearText();
+            startTimer();
+        }
+
+        function generateLines() {
+            const practiceText = document.getElementById('practiceText').value.trim();
+            practiceLines = splitTextIntoLines(practiceText, lineLength);
+            const practiceLinesContainer = document.getElementById('practiceLines');
+            practiceLinesContainer.innerHTML = '';
+
+            practiceLines.forEach((line, index) => {
+                const lineContainer = document.createElement('div');
+                lineContainer.className = 'practice-line';
+                lineContainer.innerHTML = `<span id="line${index}">${line}</span>`;
+                const typingArea = document.createElement('textarea');
+                typingArea.className = 'typing-area';
+                typingArea.dataset.lineIndex = index;
+                typingArea.addEventListener('input', handleInput);
+                lineContainer.appendChild(typingArea);
+                practiceLinesContainer.appendChild(lineContainer);
+            });
+
+            // 计算总字数
+            wordCount = practiceLines.reduce((total, line) => total + line.length, 0);
+
+            startTimer();
+
+            // 将焦点设置到第一个输入框
+            const firstTypingArea = document.querySelector(`textarea[data-line-index="0"]`);
+            if (firstTypingArea) {
+                firstTypingArea.focus();
+            }
+        }
+
+        function splitTextIntoLines(text, maxLineLength) {
+            const lines = [];
+            const paragraphs = text.split('\n');
+            paragraphs.forEach(paragraph => {
+                for (let i = 0; i < paragraph.length; i += maxLineLength) {
+                    lines.push(paragraph.slice(i, i + maxLineLength));
+                }
+            });
+            return lines;
+        }
+
+        function handleInput(event) {
+            const typingArea = event.target;
+            const lineIndex = typingArea.dataset.lineIndex;
+            const inputText = typingArea.value;
+            const practiceText = practiceLines[lineIndex];
+
+            const lineElement = document.getElementById(`line${lineIndex}`);
+            lineElement.innerHTML = '';
+
+            for (let i = 0; i < inputText.length; i++) {
+                const span = document.createElement('span');
+                span.innerText = practiceText[i];
+                if (inputText[i] === practiceText[i]) {
+                    span.className = 'correct';
+                } else {
+                    span.className = 'incorrect';
+                    errorCount++;
+                }
+                lineElement.appendChild(span);
+            }
+
+            for (let i = inputText.length; i < practiceText.length; i++) {
+                const span = document.createElement('span');
+                span.innerText = practiceText[i];
+                lineElement.appendChild(span);
+            }
+
+            const currentTime = new Date();
+            const timeDiff = (currentTime - startTime) / 1000; // 时间差，单位为秒
+            const minutes = timeDiff / 60; // 时间差，单位为分钟
+            const wpm = Math.round((wordCount / minutes) || 0); // 计算每分钟的打字速度
+            document.getElementById('stats').innerText = `打字速度: ${wpm} WPM\n错误次数: ${errorCount}\n字数：${wordCount}\n耗时: ${Math.round(timeDiff)} 秒`;
+
+            if (inputText.trim() === practiceText.trim()) {
+                typingArea.disabled = true;
+                const nextLineIndex = parseInt(lineIndex) + 1;
+                const nextTypingArea = document.querySelector(`textarea[data-line-index="${nextLineIndex}"]`);
+                if (nextTypingArea) {
+                    nextTypingArea.focus();
+                } else {
+                    if (practiceLines.every((line, index) => document.getElementById(`line${index}`).innerText === line)) {
+                        stopTimer();
+                        document.getElementById('completionMessage').style.display = 'block';
+                    }
+                }
+            }
+        }
+
+        function updateCharCount() {
+            const practiceText = document.getElementById('practiceText').value;
+            document.getElementById('charCount').innerText = `字符数: ${practiceText.length}`;
+        }
+
+        function updateLineLength() {
+            const newLineLength = parseInt(document.getElementById('lineLength').value);
+            if (newLineLength >= 25) {
+                lineLength = newLineLength;
+            }
+        }
+    </script>
+</body>
+</html>
