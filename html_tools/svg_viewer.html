@@ -8,12 +8,17 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
         textarea {
             width: 100%;
             height: 150px;
             margin-bottom: 20px;
             font-family: monospace;
+            padding: 10px;
+            box-sizing: border-box;
         }
         #svg-container {
             width: 100%;
@@ -23,26 +28,62 @@
             align-items: center;
             justify-content: center;
             overflow: auto;
+            position: relative;
+            background-color: #f9f9f9;
         }
         #svg-container svg {
-            max-width: 100%;
-            max-height: 100%;
+            /* 移除最大宽高限制，使用预览控件来控制大小 */
+            /* max-width: 100%;
+            max-height: 100%; */
+        }
+        .controls {
+            margin: 10px 0 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="range"] {
+            width: 200px;
+        }
+        .zoom-value {
+            min-width: 50px;
         }
     </style>
 </head>
 <body>
 
 <h1>SVG Viewer</h1>
-<p>Paste your SVG code below to preview it:</p>
+<p>粘贴您的 SVG 代码到下方进行预览：</p>
 
-<textarea id="svg-input" placeholder="Paste your SVG code here..."></textarea>
-<button onclick="previewSVG()">Preview SVG</button>
+<textarea id="svg-input" placeholder="在此粘贴 SVG 代码..."></textarea>
+
+<div class="controls">
+    <button onclick="previewSVG()">预览 SVG</button>
+    <label for="zoom">缩放：</label>
+    <input type="range" id="zoom" min="10" max="200" value="100" oninput="updateZoom(this.value)">
+    <span id="zoom-value" class="zoom-value">100%</span>
+    <button onclick="resetZoom()">重置视图</button>
+</div>
 
 <div id="svg-container">
     <!-- SVG will be rendered here -->
 </div>
 
 <script>
+    let currentSvg = null;
+    let currentZoom = 100;
+
     function previewSVG() {
         const svgInput = document.getElementById('svg-input').value;
         const svgContainer = document.getElementById('svg-container');
@@ -57,13 +98,50 @@
 
             // Check if the parsed document contains any parsing errors
             if (svgDoc.querySelector('parsererror')) {
-                throw new Error('Invalid SVG code');
+                throw new Error('无效的 SVG 代码');
             }
 
+            // Get the SVG element
+            currentSvg = svgDoc.documentElement;
+            
+            // Make sure SVG has viewBox if it doesn't already have one
+            if (!currentSvg.hasAttribute('viewBox') && 
+                currentSvg.hasAttribute('width') && 
+                currentSvg.hasAttribute('height')) {
+                const width = currentSvg.getAttribute('width');
+                const height = currentSvg.getAttribute('height');
+                currentSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            }
+            
+            // Reset zoom before appending
+            resetZoom();
+            
             // Append the parsed SVG to the container
-            svgContainer.appendChild(svgDoc.documentElement);
+            svgContainer.appendChild(currentSvg);
         } catch (error) {
-            svgContainer.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            svgContainer.innerHTML = `<p style="color: red;">错误: ${error.message}</p>`;
+            currentSvg = null;
+        }
+    }
+
+    function updateZoom(zoom) {
+        if (!currentSvg) return;
+        
+        currentZoom = zoom;
+        document.getElementById('zoom-value').textContent = `${zoom}%`;
+        
+        // Apply the zoom
+        currentSvg.style.transform = `scale(${zoom / 100})`;
+        currentSvg.style.transformOrigin = 'center center';
+    }
+
+    function resetZoom() {
+        currentZoom = 100;
+        document.getElementById('zoom').value = 100;
+        document.getElementById('zoom-value').textContent = '100%';
+        
+        if (currentSvg) {
+            currentSvg.style.transform = '';
         }
     }
 </script>
