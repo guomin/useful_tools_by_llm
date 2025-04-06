@@ -41,6 +41,7 @@
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
         }
         button {
             padding: 8px 15px;
@@ -53,11 +54,43 @@
         button:hover {
             background-color: #45a049;
         }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.secondary:hover {
+            background-color: #0b7dda;
+        }
+        button.example-btn {
+            background-color: #ff9800;
+        }
+        button.example-btn:hover {
+            background-color: #e68a00;
+        }
         input[type="range"] {
             width: 200px;
         }
         .zoom-value {
             min-width: 50px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        #status-message {
+            margin-top: 10px;
+            color: #4CAF50;
+            min-height: 20px;
+        }
+        .auto-preview-container {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+        .divider {
+            margin: 0 10px;
+            border-left: 1px solid #ccc;
+            height: 24px;
         }
     </style>
 </head>
@@ -70,11 +103,30 @@
 
 <div class="controls">
     <button onclick="previewSVG()">预览 SVG</button>
+    
+    <div class="auto-preview-container">
+        <input type="checkbox" id="auto-preview" checked>
+        <label for="auto-preview">自动预览</label>
+    </div>
+    
+    <button class="example-btn" onclick="loadExample()">加载示例</button>
+    
+    <div class="divider"></div>
+    
     <label for="zoom">缩放：</label>
     <input type="range" id="zoom" min="10" max="200" value="100" oninput="updateZoom(this.value)">
     <span id="zoom-value" class="zoom-value">100%</span>
     <button onclick="resetZoom()">重置视图</button>
 </div>
+
+<div class="controls">
+    <div class="button-group">
+        <button class="secondary" onclick="copyAsPNG()">复制为PNG</button>
+        <button class="secondary" onclick="downloadPNG()">下载PNG</button>
+    </div>
+</div>
+
+<div id="status-message"></div>
 
 <div id="svg-container">
     <!-- SVG will be rendered here -->
@@ -83,10 +135,23 @@
 <script>
     let currentSvg = null;
     let currentZoom = 100;
+    let autoPreviewTimeout = null;
+
+    // 添加输入事件监听器以支持自动预览
+    document.getElementById('svg-input').addEventListener('input', function() {
+        if (document.getElementById('auto-preview').checked) {
+            clearTimeout(autoPreviewTimeout);
+            autoPreviewTimeout = setTimeout(previewSVG, 500); // 延迟500毫秒预览，避免频繁渲染
+        }
+    });
 
     function previewSVG() {
         const svgInput = document.getElementById('svg-input').value;
         const svgContainer = document.getElementById('svg-container');
+        const statusMessage = document.getElementById('status-message');
+        
+        // 清除状态消息
+        statusMessage.textContent = '';
         
         // Clear previous SVG
         svgContainer.innerHTML = '';
@@ -118,6 +183,8 @@
             
             // Append the parsed SVG to the container
             svgContainer.appendChild(currentSvg);
+            
+            statusMessage.textContent = "SVG 已成功加载！";
         } catch (error) {
             svgContainer.innerHTML = `<p style="color: red;">错误: ${error.message}</p>`;
             currentSvg = null;
@@ -143,6 +210,140 @@
         if (currentSvg) {
             currentSvg.style.transform = '';
         }
+    }
+    
+    function copyAsPNG() {
+        if (!currentSvg) {
+            showStatus('没有可用的 SVG 图像', 'error');
+            return;
+        }
+        
+        const statusMessage = document.getElementById('status-message');
+        statusMessage.textContent = '正在处理图像...';
+        
+        // 创建一个克隆以避免修改当前显示的SVG
+        const svgClone = currentSvg.cloneNode(true);
+        
+        // 将SVG转换为图像
+        svgToCanvas(svgClone)
+            .then(canvas => {
+                canvas.toBlob(blob => {
+                    try {
+                        // 复制到剪贴板
+                        navigator.clipboard.write([
+                            new ClipboardItem({'image/png': blob})
+                        ]).then(() => {
+                            showStatus('PNG 已复制到剪贴板');
+                        }).catch(err => {
+                            console.error('复制到剪贴板失败:', err);
+                            showStatus('复制到剪贴板失败', 'error');
+                        });
+                    } catch (err) {
+                        console.error('剪贴板API不可用:', err);
+                        showStatus('您的浏览器不支持此功能', 'error');
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('转换SVG失败:', error);
+                showStatus('转换SVG失败', 'error');
+            });
+    }
+    
+    function downloadPNG() {
+        if (!currentSvg) {
+            showStatus('没有可用的 SVG 图像', 'error');
+            return;
+        }
+        
+        const statusMessage = document.getElementById('status-message');
+        statusMessage.textContent = '正在准备下载...';
+        
+        // 创建一个克隆以避免修改当前显示的SVG
+        const svgClone = currentSvg.cloneNode(true);
+        
+        // 将SVG转换为图像
+        svgToCanvas(svgClone)
+            .then(canvas => {
+                // 创建下载链接
+                const link = document.createElement('a');
+                link.download = 'svg_export.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showStatus('PNG 已准备下载');
+            })
+            .catch(error => {
+                console.error('转换SVG失败:', error);
+                showStatus('转换SVG失败', 'error');
+            });
+    }
+    
+    function svgToCanvas(svgElement) {
+        return new Promise((resolve, reject) => {
+            // 获取SVG的尺寸
+            let width = parseInt(svgElement.getAttribute('width')) || 800;
+            let height = parseInt(svgElement.getAttribute('height')) || 600;
+            
+            // 如果没有明确的宽高，尝试从viewBox获取
+            if (!width || !height) {
+                const viewBox = svgElement.getAttribute('viewBox');
+                if (viewBox) {
+                    const parts = viewBox.split(' ');
+                    if (parts.length === 4) {
+                        width = parseInt(parts[2]) || 800;
+                        height = parseInt(parts[3]) || 600;
+                    }
+                }
+            }
+            
+            // 将SVG转换为字符串
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgElement);
+            const svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+            const url = URL.createObjectURL(svgBlob);
+            
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, width, height);
+                URL.revokeObjectURL(url);
+                resolve(canvas);
+            };
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+    
+    function showStatus(message, type = 'success') {
+        const statusMessage = document.getElementById('status-message');
+        statusMessage.textContent = message;
+        statusMessage.style.color = type === 'error' ? '#f44336' : '#4CAF50';
+        
+        // 3秒后自动清除成功消息
+        if (type === 'success') {
+            setTimeout(() => {
+                if (statusMessage.textContent === message) {
+                    statusMessage.textContent = '';
+                }
+            }, 3000);
+        }
+    }
+    
+    function loadExample() {
+        const exampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <rect x="10" y="10" width="180" height="180" fill="#f5f5f5" stroke="#333" stroke-width="2"/>
+  <circle cx="100" cy="100" r="50" fill="#4CAF50"/>
+  <polygon points="100,40 120,80 170,80 130,110 150,150 100,125 50,150 70,110 30,80 80,80" fill="#FFC107"/>
+  <text x="100" y="185" text-anchor="middle" font-family="Arial" font-size="12">SVG 示例</text>
+</svg>`;
+        
+        document.getElementById('svg-input').value = exampleSvg;
+        previewSVG();
     }
 </script>
 
