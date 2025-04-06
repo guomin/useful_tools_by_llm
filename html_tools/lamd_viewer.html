@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>公式与表格渲染器 - 离线版</title>
+  
+  <!-- 引入 KaTeX CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+
+  <!-- 引入 KaTeX 主要库 -->
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  
+  <!-- 如果需要自动渲染，但我们将手动控制渲染过程 -->
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    
+    .editor, .preview {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      background-color: white;
+    }
+    
+    .editor {
+      height: 500px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #input {
+      flex-grow: 1;
+      resize: none;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    
+    .preview {
+      height: 500px;
+      overflow: auto;
+    }
+    
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+    }
+    
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    
+    th, td {
+      padding: 8px 12px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #f2f2f2;
+    }
+    
+    button {
+      margin-top: 8px;
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #45a049;
+    }
+    
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .copy-button {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      padding: 2px 8px;
+      font-size: 12px;
+      background-color: #007bff;
+      opacity: 0.7;
+    }
+    
+    .copy-button:hover {
+      opacity: 1;
+      background-color: #0056b3;
+    }
+    
+    .table-wrapper {
+      position: relative;
+      overflow-x: auto;
+    }
+    
+    .formula-wrapper {
+      position: relative;
+      margin: 1em 0;
+    }
+    
+    .example-section {
+      margin-top: 30px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+    }
+    
+    .example-button {
+      background-color: #6c757d;
+    }
+    
+    .example-button:hover {
+      background-color: #5a6268;
+    }
+    
+    h1, h2 {
+      color: #333;
+    }
+    
+    .notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border-radius: 4px;
+      display: none;
+      z-index: 100;
+    }
+    
+    /* 用于渲染复制内容的隐藏元素 */
+    #render-for-copy {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+    }
+    
+    /* Word样式的表格 */
+    .word-table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .word-table th {
+      background-color: #EFEFEF;
+      font-weight: bold;
+    }
+    .word-table th, .word-table td {
+      border: 1px solid #000;
+      padding: 6px 8px;
+    }
+    
+    /* LaTeX样式的表格 */
+    .latex-table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 16px 0;
+      font-family: "Computer Modern", serif;
+    }
+    
+    .latex-table th, .latex-table td {
+      padding: 8px 12px;
+    }
+    
+    .latex-table .hline td {
+      border-top: 1px solid black;
+    }
+    
+    .latex-table tr.last-row td {
+      border-bottom: 1px solid black;
+    }
+    
+    .latex-table .toprule td {
+      border-top: 2px solid black;
+    }
+    
+    .latex-table .midrule td {
+      border-top: 1px solid black;
+    }
+    
+    .latex-table .bottomrule td {
+      border-bottom: 2px solid black;
+    }
+    
+    /* 表格对齐样式 */
+    .text-left {
+      text-align: left;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .text-right {
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <h1>公式与表格渲染器 - 离线版</h1>
+  <p>在左侧编辑框中输入LaTeX公式或Markdown/LaTeX表格，右侧将显示渲染结果。支持一键复制渲染结果。</p>
+  
+  <div class="container">
+    <div class="editor">
+      <h2>编辑区</h2>
+      <textarea id="input" placeholder="在此处输入LaTeX公式或Markdown/LaTeX表格..."></textarea>
+      <div class="button-group">
+        <button id="render-btn">渲染</button>
+        <button id="copy-rendered-btn">复制渲染结果</button>
+        <button id="copy-html-btn">复制HTML</button>
+        <button id="copy-markdown-btn">复制Markdown</button>
+        <button id="clear-btn">清空</button>
+      </div>
+    </div>
+    <div class="preview">
+      <h2>预览区</h2>
+      <div id="output"></div>
+    </div>
+  </div>
+  
+  <div class="example-section">
+    <h2>示例</h2>
+    <div class="button-group">
+      <button class="example-button" id="example-math">LaTeX公式示例</button>
+      <button class="example-button" id="example-table">Markdown表格示例</button>
+      <button class="example-button" id="example-latex-tables">LaTeX表格示例</button>
+      <button class="example-button" id="example-combined">综合示例</button>
+    </div>
+  </div>
+  
+  <div id="notification" class="notification"></div>
+  <div id="render-for-copy"></div>
+  
+  <script>
+    // 内联marked.js库
+    (function(){
+    window.marked = {
+      // 简化版marked解析器
+      parse: function(text) {
+        // 处理标题
+        text = text.replace(/^(#{1,6})\s+(.+)$/gm, function(match, hashes, content) {
+          const level = hashes.length;
+          return `<h${level}>${content}</h${level}>`;
+        });
+        
+        // 处理粗体
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // 处理斜体
+        text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        
+        // 处理行内代码
+        text = text.replace(/`(.+?)`/g, '<code>$1</code>');
+        
+        // 处理链接
+        text = text.replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+        
+        // Markdown表格处理
+        const tableRegex = /^\|(.+)\|$/gm;
+        const tables = [];
+        let tableData = null;
+        
+        // 提取所有表格数据
+        let match;
+        const lines = text.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          
+          // 检查是否是表格行
+          if (line.match(tableRegex)) {
+            if (!tableData) {
+              tableData = {
+                startLine: i,
+                headers: [],
+                alignments: [],
+                rows: []
+              };
+            }
+            
+            // 解析表格行
+            const cells = line.split('|').slice(1, -1);
+            
+            // 判断是否是分隔行
+            const isSeparator = cells.every(cell => {
+              const trimmed = cell.trim();
+              return trimmed === '' || /^[-:]+$/.test(trimmed);
+            });
+            
+            if (isSeparator) {
+              // 解析对齐信息
+              tableData.alignments = cells.map(cell => {
+                const trimmed = cell.trim();
+                if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+                if (trimmed.endsWith(':')) return 'right';
+                if (trimmed.startsWith(':')) return 'left';
+                return '';
+              });
+            } else if (tableData.headers.length === 0) {
+              // 第一个非分隔行是表头
+              tableData.headers = cells.map(cell => cell.trim());
+            } else {
+              // 其他行是数据行
+              tableData.rows.push(cells.map(cell => cell.trim()));
+            }
+          } else if (tableData) {
+            // 非表格行，当前表格结束
+            tableData.endLine = i - 1;
+            tables.push(tableData);
+            tableData = null;
+          }
+        }
+        
+        // 处理最后一个表格
+        if (tableData) {
+          tableData.endLine = lines.length - 1;
+          tables.push(tableData);
+        }
+        
+        // 为每个表格生成HTML
+        tables.forEach(table => {
+          let tableHtml = '<table class="word-table">\n<thead>\n<tr>\n';
+          
+          // 表头
+          table.headers.forEach((header, i) => {
+            const alignment = table.alignments[i] || '';
+            const alignClass = alignment ? `class="text-${alignment}"` : '';
+            tableHtml += `<th ${alignClass}>${header}</th>\n`;
+          });
+          
+          tableHtml += '</tr>\n</thead>\n<tbody>\n';
+          
+          // 表格主体
+          table.rows.forEach(row => {
+            tableHtml += '<tr>\n';
+            row.forEach((cell, i) => {
+              const alignment = table.alignments[i] || '';
+              const alignClass = alignment ? `class="text-${alignment}"` : '';
+              tableHtml += `<td ${alignClass}>${cell}</td>\n`;
+            });
+            tableHtml += '</tr>\n';
+          });
+          
+          tableHtml += '</tbody>\n</table>';
+          
+          // 替换原始表格文本
+          const originalLines = lines.slice(table.startLine, table.endLine + 1);
+          const originalText = originalLines.join('\n');
+          text = text.replace(originalText, tableHtml);
+        });
+        
+        // 处理段落（不匹配HTML标签开头的行）
+        text = text.split('\n').map(line => {
+          if (line.trim() === '') return '';
+          if (line.trim().startsWith('<')) return line; // 如果已经是HTML元素，则不处理
+          return `<p>${line}</p>`;
+        }).join('\n');
+        
+        return text;
+      }
+    };
+    
+    // 获取DOM元素
+    const inputEl = document.getElementById('input');
+    const outputEl = document.getElementById('output');
+    const renderBtn = document.getElementById('render-btn');
+    const copyRenderedBtn = document.getElementById('copy-rendered-btn');
+    const copyHtmlBtn = document.getElementById('copy-html-btn');
+    const copyMarkdownBtn = document.getElementById('copy-markdown-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const exampleMathBtn = document.getElementById('example-math');
+    const exampleTableBtn = document.getElementById('example-table');
+    const exampleLatexTablesBtn = document.getElementById('example-latex-tables');
+    const exampleCombinedBtn = document.getElementById('example-combined');
+    const notification = document.getElementById('notification');
+    const renderForCopyEl = document.getElementById('render-for-copy');
+    
+    // 渲染函数
+    function renderContent() {
+      const input = inputEl.value;
+      
+      // 保存所有要处理的内容类型以防止相互干扰
+      const displayFormulas = [];
+      const inlineFormulas = [];
+      const latexTables = [];
+      
+      // 替换LaTeX表格为占位符
+      let processedInput = input.replace(/\\begin\{tabular\}(\{[^}]*\})([\s\S]*?)\\end\{tabular\}/g, (match, format, content) => {
+        const id = latexTables.length;
+        latexTables.push({ format, content, fullMatch: match });
+        return `LATEX_TABLE_${id}`;
+      });
+      
+      // 替换行间公式为占位符
+      processedInput = processedInput.replace(/\$\$([\s\S]*?)\$\$/g, (match, content) => {
+        const id = displayFormulas.length;
+        displayFormulas.push(content);
+        return `DISPLAY_FORMULA_${id}`;
+      });
+      
+      // 替换行内公式为占位符
+      processedInput = processedInput.replace(/\$([^\$\n]+?)\$/g, (match, content) => {
+        const id = inlineFormulas.length;
+        inlineFormulas.push(content);
+        return `INLINE_FORMULA_${id}`;
+      });
+      
+      // 解析Markdown (不含公式和LaTeX表格)
+      let htmlContent = marked.parse(processedInput);
+      
+      // 恢复LaTeX表格
+      htmlContent = htmlContent.replace(/LATEX_TABLE_(\d+)/g, (match, id) => {
+        const tableData = latexTables[parseInt(id)];
+        try {
+          return renderLatexTable(tableData.format, tableData.content, tableData.fullMatch);
+        } catch (e) {
+          console.error("LaTeX表格渲染错误:", e);
+          return `<div class="table-wrapper"><pre>${tableData.fullMatch}</pre><span style="color:red">表格渲染错误: ${e.message}</span></div>`;
+        }
+      });
+      
+      // 恢复行间公式
+      htmlContent = htmlContent.replace(/DISPLAY_FORMULA_(\d+)/g, (match, id) => {
+        const formula = displayFormulas[parseInt(id)];
+        try {
+          // 创建一个包装元素
+          const wrapper = document.createElement('div');
+          wrapper.className = 'formula-wrapper';
+          
+          // 创建公式显示元素
+          const displayElement = document.createElement('div');
+          displayElement.className = 'katex-display';
+          
+          // 渲染公式
+          katex.render(formula, displayElement, {
+            displayMode: true,
+            throwOnError: false,
+            output: 'html'
+          });
+          
+          wrapper.appendChild(displayElement);
+          
+          // 创建一个临时元素来获取HTML
+          const temp = document.createElement('div');
+          temp.appendChild(wrapper);
+          return temp.innerHTML;
+        } catch (e) {
+          console.error("公式渲染错误:", e);
+          return `<div class="formula-wrapper"><div class="katex-display">$$${formula}$$<br><span style="color:red">渲染错误: ${e.message}</span></div></div>`;
+        }
+      });
+      
+      // 恢复行内公式
+      htmlContent = htmlContent.replace(/INLINE_FORMULA_(\d+)/g, (match, id) => {
+        const formula = inlineFormulas[parseInt(id)];
+        try {
+          // 创建一个包装元素
+          const wrapper = document.createElement('span');
+          wrapper.className = 'formula-wrapper';
+          
+          // 渲染公式
+          katex.render(formula, wrapper, {
+            displayMode: false,
+            throwOnError: false,
+            output: 'html'
+          });
+          
+          // 创建一个临时元素来获取HTML
+          const temp = document.createElement('div');
+          temp.appendChild(wrapper);
+          return temp.innerHTML;
+        } catch (e) {
+          console.error("公式渲染错误:", e);
+          return `<span class="formula-wrapper" style="color:red">$${formula}$ (渲染错误)</span>`;
+        }
+      });
+      
+      // 更新输出
+      outputEl.innerHTML = htmlContent;
+      
+      // 为表格添加复制按钮
+      addCopyButtonsToElements();
+    }
+    
+    // 解析和渲染LaTeX表格
+    function renderLatexTable(format, content, fullMatch) {
+      // 提取列格式 {|l|c|r|}
+      let colFormats = format.match(/\{([^}]*)\}/)[1];
+      
+      // 创建表格容器
+      let tableHtml = '<div class="table-wrapper"><table class="latex-table">\n';
+      
+      // 辅助函数：专门处理\textbf命令
+      function processTextbf(text) {
+        console.log("处理textbf前的文本:", text);
+        
+        // 首先检查确保文本是完整的，如果缺少右括号则尝试添加
+        let fixedText = text;
+        const textbfOpenCount = (text.match(/\\textbf\{/g) || []).length;
+        const braceCloseCount = (text.match(/\}/g) || []).length;
+        const braceOpenCount = (text.match(/\{/g) || []).length;
+        
+        // 如果右括号少于左括号，可能缺少闭合括号
+        if (braceCloseCount < braceOpenCount) {
+          fixedText = text + '}';
+          console.log("修复括号后的文本:", fixedText);
+        }
+        
+        // 先处理简单的\textbf{内容}情况
+        let processed = fixedText.replace(/\\textbf\{([^{}]+)\}/g, '<strong>$1</strong>');
+        
+        // 处理可能嵌套的情况
+        while (processed.includes('\\textbf{')) {
+          // 查找最内层的\textbf
+          const start = processed.lastIndexOf('\\textbf{');
+          if (start === -1) break;
+          
+          // 找到对应的右括号
+          let openBraces = 0;
+          let endPos = -1;
+          
+          for (let i = start + 7; i < processed.length; i++) {
+            if (processed[i] === '{') openBraces++;
+            else if (processed[i] === '}') {
+              if (openBraces === 0) {
+                endPos = i;
+                break;
+              }
+              openBraces--;
+            }
+          }
+          
+          if (endPos === -1) break; // 没找到匹配的括号
+          
+          // 提取内容并替换
+          const content = processed.substring(start + 7, endPos);
+          processed = processed.substring(0, start) + 
+                     '<strong>' + content + '</strong>' + 
+                     processed.substring(endPos + 1);
+        }
+        
+        console.log("处理textbf后的文本:", processed);
+        return processed;
+      }
+      
+      // 将内容分成行，但保留命令行（如\hline）
+      const allContentLines = content.trim().split(/\\\\/).map(line => line.trim()).filter(line => line);
+      
+      const dataLines = [];
+      
+      // 过滤掉命令行，只保留数据行
+      allContentLines.forEach((line, index) => {
+        // 忽略只包含命令的行
+        if (line.match(/^\\(hline|toprule|midrule|bottomrule)$/)) {
+          return;
+        }
+        
+        // 移除行开头的命令
+        let dataLine = line;
+        if (line.match(/^\\(hline|toprule|midrule|bottomrule)/)) {
+          dataLine = line.replace(/^\\(hline|toprule|midrule|bottomrule)\s*/, '');
+        }
+        
+        // 移除行结尾的命令
+        dataLine = dataLine.replace(/\\(hline|toprule|midrule|bottomrule)$/, '');
+        
+        // 如果移除命令后还有内容，添加到数据行
+        if (dataLine.trim()) {
+          dataLines.push(dataLine);
+        }
+      });
+      
+      // 确定列数
+      const numCols = colFormats.replace(/[|]/g, '').length;
+      
+      // 检测标题行 - 通常是第一行或第一个包含\textbf的行
+      let headerRowIndex = 0;
+      for (let i = 0; i < dataLines.length; i++) {
+        if (dataLines[i].includes('\\textbf')) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+      
+      // 开始构建表格
+      tableHtml += '<thead>\n';
+      
+      // 添加表头行
+      if (dataLines.length > 0) {
+        const headerRow = dataLines[headerRowIndex];
+        tableHtml += '<tr>\n';
+        
+        // 分割单元格
+        const cells = headerRow.split('&').map(cell => cell.trim());
+        
+        // 处理每个单元格
+        cells.forEach((cell, colIndex) => {
+          console.log(`处理单元格 ${colIndex}:`, cell);
+          
+          // 检查多列单元格
+          const multicolMatch = cell.match(/\\multicolumn\{(\d+)\}\{([^}]*)\}\{(.*)\}/s);
+          
+          if (multicolMatch) {
+            const colSpan = multicolMatch[1];
+            const cellFormat = multicolMatch[2];
+            // 捕获整个内容，确保括号匹配
+            let content = multicolMatch[3];
+            
+            // 检查括号是否配对，如果不匹配则修复
+            const openBraces = (content.match(/\{/g) || []).length;
+            const closeBraces = (content.match(/\}/g) || []).length;
+            
+            if (openBraces > closeBraces) {
+              console.log(`多列单元格内容括号不匹配: 左括号${openBraces}个, 右括号${closeBraces}个`);
+              // 捕获最后一个右大括号之前的所有内容
+              content = content.replace(/\}$/, '');
+            }
+            
+            // 特殊处理处理 \multicolumn 中的 \textbf
+            content = processTextbf(content);
+            
+            // 处理 \% 转义
+            content = content.replace(/\\%/g, '%');
+            
+            // 确定对齐方式
+            let align = 'left';
+            if (cellFormat.includes('c')) align = 'center';
+            if (cellFormat.includes('r')) align = 'right';
+            
+            tableHtml += `<th class="text-${align}" colspan="${colSpan}">${content}</th>\n`;
+          } else {
+            // 普通单元格
+            let cellContent = cell;
+            
+            // 特殊处理处理单元格中的 \textbf
+            cellContent = processTextbf(cellContent);
+            
+            // 处理 \% 转义
+            cellContent = cellContent.replace(/\\%/g, '%');
+            
+            // 从表格格式确定对齐方式
+            let align = 'left';
+            const colFormat = colFormats.replace(/[|]/g, '')[colIndex] || 'l';
+            if (colFormat === 'c') align = 'center';
+            if (colFormat === 'r') align = 'right';
+            
+            tableHtml += `<th class="text-${align}">${cellContent}</th>\n`;
+          }
+        });
+        
+        tableHtml += '</tr>\n';
+      }
+      
+      // 关闭表头
+      tableHtml += '</thead>\n<tbody>\n';
+      
+      // 处理数据行
+      for (let i = 0; i < dataLines.length; i++) {
+        // 跳过表头行
+        if (i === headerRowIndex) continue;
+        
+        // 添加数据行
+        tableHtml += '<tr>\n';
+        
+        // 分割单元格
+        const cells = dataLines[i].split('&').map(cell => cell.trim());
+        
+        // 处理每个单元格
+        cells.forEach((cell, colIndex) => {
+          console.log(`处理单元格 ${colIndex}:`, cell);
+          
+          // 检查多列单元格
+          const multicolMatch = cell.match(/\\multicolumn\{(\d+)\}\{([^}]*)\}\{(.*)\}/s);
+          
+          if (multicolMatch) {
+            const colSpan = multicolMatch[1];
+            const cellFormat = multicolMatch[2];
+            // 捕获整个内容，确保括号匹配
+            let content = multicolMatch[3];
+            
+            // 检查括号是否配对，如果不匹配则修复
+            const openBraces = (content.match(/\{/g) || []).length;
+            const closeBraces = (content.match(/\}/g) || []).length;
+            
+            if (openBraces > closeBraces) {
+              console.log(`多列单元格内容括号不匹配: 左括号${openBraces}个, 右括号${closeBraces}个`);
+              // 捕获最后一个右大括号之前的所有内容
+              content = content.replace(/\}$/, '');
+            }
+            
+            // 特殊处理处理 \multicolumn 中的 \textbf
+            content = processTextbf(content);
+            
+            // 处理 \% 转义
+            content = content.replace(/\\%/g, '%');
+            
+            // 确定对齐方式
+            let align = 'left';
+            if (cellFormat.includes('c')) align = 'center';
+            if (cellFormat.includes('r')) align = 'right';
+            
+            tableHtml += `<td class="text-${align}" colspan="${colSpan}">${content}</td>\n`;
+          } else {
+            // 普通单元格
+            let cellContent = cell;
+            
+            // 特殊处理处理单元格中的 \textbf
+            cellContent = processTextbf(cellContent);
+            
+            // 处理 \% 转义
+            cellContent = cellContent.replace(/\\%/g, '%');
+            
+            // 从表格格式确定对齐方式
+            let align = 'left';
+            const colFormat = colFormats.replace(/[|]/g, '')[colIndex] || 'l';
+            if (colFormat === 'c') align = 'center';
+            if (colFormat === 'r') align = 'right';
+            
+            tableHtml += `<td class="text-${align}">${cellContent}</td>\n`;
+          }
+        });
+        
+        tableHtml += '</tr>\n';
+      }
+      
+      tableHtml += '</tbody>\n</table></div>';
+      return tableHtml;
+    }
+    
+    // 为表格和公式添加复制按钮
+    function addCopyButtonsToElements() {
+      // 为表格添加复制按钮
+      const tables = outputEl.querySelectorAll('table');
+      tables.forEach((table, index) => {
+        // 检查表格是否已经在包装器中
+        let wrapper = table.closest('.table-wrapper');
+        if (!wrapper) {
+          wrapper = document.createElement('div');
+          wrapper.className = 'table-wrapper';
+          wrapper.style.position = 'relative';
+          // 将表格放入包装器中
+          table.parentNode.insertBefore(wrapper, table);
+          wrapper.appendChild(table);
+        }
+        
+        // 如果没有复制按钮，则添加
+        if (!wrapper.querySelector('.copy-button')) {
+          // 创建复制按钮
+          const copyButton = document.createElement('button');
+          copyButton.className = 'copy-button';
+          copyButton.textContent = '复制表格';
+          copyButton.onclick = function() {
+            copyTableAsText(table);
+          };
+          wrapper.appendChild(copyButton);
+        }
+      });
+      
+      // 为公式添加复制按钮
+      const formulas = outputEl.querySelectorAll('.formula-wrapper');
+      formulas.forEach((formula) => {
+        // 如果已有复制按钮，跳过
+        if (formula.querySelector('.copy-button')) {
+          return;
+        }
+        
+        // 创建复制按钮
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-button';
+        copyButton.textContent = '复制公式';
+        copyButton.style.top = '5px';
+        copyButton.style.right = '5px';
+        
+        // 设置相对定位以便按钮正确放置
+        if (getComputedStyle(formula).position !== 'relative') {
+          formula.style.position = 'relative';
+        }
+        
+        copyButton.onclick = function() {
+          const formulaText = getOriginalFormulaText(formula);
+          copyToClipboard(formulaText, '公式已复制到剪贴板');
+        };
+        formula.appendChild(copyButton);
+      });
+    }
+    
+    // 获取公式的原始文本
+    function getOriginalFormulaText(formulaEl) {
+      const input = inputEl.value;
+      const isDisplayMode = formulaEl.querySelector('.katex-display') !== null;
+      
+      // 寻找匹配的公式
+      const displayFormulaRegex = /\$\$([\s\S]*?)\$\$/g;
+      const inlineFormulaRegex = /\$([^\$\n]+?)\$/g;
+      
+      if (isDisplayMode) {
+        // 显示模式公式
+        const matches = [];
+        let match;
+        while ((match = displayFormulaRegex.exec(input)) !== null) {
+          matches.push(match[0]); // 完整匹配，包括 $$ 符号
+        }
+        
+        if (matches.length > 0) {
+          // 返回第一个匹配的公式
+          return matches[0];
+        }
+      } else {
+        // 内联模式公式
+        const matches = [];
+        let match;
+        while ((match = inlineFormulaRegex.exec(input)) !== null) {
+          matches.push(match[0]); // 完整匹配，包括 $ 符号
+        }
+        
+        if (matches.length > 0) {
+          // 返回第一个匹配的公式
+          return matches[0];
+        }
+      }
+      
+      // 如果没有匹配到，返回元素的文本内容
+      return formulaEl.textContent.trim();
+    }
+    
+    // 将表格复制为文本格式
+    function copyTableAsText(table) {
+      try {
+        // 创建表格的深拷贝
+        const tableCopy = table.cloneNode(true);
+        
+        // 放入隐藏元素并清除其它内容
+        renderForCopyEl.innerHTML = '';
+        renderForCopyEl.appendChild(tableCopy);
+        
+        // 使用新API复制富文本
+        const selection = window.getSelection();
+        const range = document.createRange();
+        selection.removeAllRanges();
+        range.selectNodeContents(tableCopy);
+        selection.addRange(range);
+        document.execCommand('copy');
+        selection.removeAllRanges();
+        
+        showNotification('表格已复制，可直接粘贴到Word');
+      } catch (err) {
+        showNotification('复制失败: ' + err.message, true);
+      }
+    }
+    
+    // 复制到剪贴板
+    function copyToClipboard(text, successMessage) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text)
+          .then(() => showNotification(successMessage))
+          .catch(err => showNotification('复制失败: ' + err, true));
+      } else {
+        // 后备方法
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            showNotification(successMessage);
+          } else {
+            showNotification('复制失败', true);
+          }
+        } catch (err) {
+          showNotification('复制失败: ' + err, true);
+        }
+        
+        document.body.removeChild(textArea);
+      }
+    }
+    
+    // 复制渲染结果
+    function copyRenderedContent() {
+      try {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = outputEl.innerHTML;
+        
+        // 移除所有复制按钮
+        const copyButtons = tempDiv.querySelectorAll('.copy-button');
+        copyButtons.forEach(button => button.remove());
+        
+        // 放入渲染区
+        renderForCopyEl.innerHTML = '';
+        renderForCopyEl.appendChild(tempDiv);
+        
+        // 使用新API复制富文本
+        const selection = window.getSelection();
+        const range = document.createRange();
+        selection.removeAllRanges();
+        range.selectNodeContents(tempDiv);
+        selection.addRange(range);
+        
+        document.execCommand('copy');
+        selection.removeAllRanges();
+        
+        showNotification('渲染结果已复制，可直接粘贴到Word或其他应用');
+      } catch (err) {
+        showNotification('复制失败: ' + err.message, true);
+      }
+    }
+    
+    // 显示通知
+    function showNotification(message, isError = false) {
+      notification.textContent = message;
+      notification.style.backgroundColor = isError ? '#f44336' : '#4CAF50';
+      notification.style.display = 'block';
+      
+      setTimeout(() => {
+        notification.style.display = 'none';
+      }, 3000);
+    }
+    
+    // 事件监听器
+    renderBtn.addEventListener('click', renderContent);
+    
+    copyRenderedBtn.addEventListener('click', copyRenderedContent);
+    
+    copyHtmlBtn.addEventListener('click', () => {
+      copyToClipboard(outputEl.innerHTML, 'HTML已复制到剪贴板');
+    });
+    
+    copyMarkdownBtn.addEventListener('click', () => {
+      copyToClipboard(inputEl.value, 'Markdown已复制到剪贴板');
+    });
+    
+    clearBtn.addEventListener('click', () => {
+      inputEl.value = '';
+      outputEl.innerHTML = '';
+    });
+    
+    // 实时渲染（输入时有300ms延迟）
+    let debounceTimer;
+    inputEl.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(renderContent, 300);
+    });
+    
+    // 示例内容
+    const mathExample = `## LaTeX公式示例
+
+行内公式: $E = mc^2$
+
+行间公式:
+$$\\frac{d}{dx}\\left( \\int_{0}^{x} f(u)\\,du\\right)=f(x)$$
+
+多行公式:
+$$
+\\begin{aligned}
+\\nabla \\times \\vec{\\mathbf{B}} -\\, \\frac1c\\, \\frac{\\partial\\vec{\\mathbf{E}}}{\\partial t} & = \\frac{4\\pi}{c}\\vec{\\mathbf{j}} \\\\
+\\nabla \\cdot \\vec{\\mathbf{E}} & = 4 \\pi \\rho \\\\
+\\nabla \\times \\vec{\\mathbf{E}}\\, +\\, \\frac1c\\, \\frac{\\partial\\vec{\\mathbf{B}}}{\\partial t} & = \\vec{\\mathbf{0}} \\\\
+\\nabla \\cdot \\vec{\\mathbf{B}} & = 0
+\\end{aligned}
+$$
+
+矩阵:
+$$
+\\begin{pmatrix}
+a_{11} & a_{12} & a_{13} \\\\
+a_{21} & a_{22} & a_{23} \\\\
+a_{31} & a_{32} & a_{33}
+\\end{pmatrix}
+$$
+`;
+
+    const tableExample = `## Markdown表格示例
+
+### 基本表格
+| 姓名 | 年龄 | 职业 |
+| ---- | ---- | ---- |
+| 张三 | 25 | 工程师 |
+| 李四 | 30 | 设计师 |
+| 王五 | 28 | 教师 |
+
+### 文本对齐
+| 产品 | 价格 | 库存 |
+| :--- | :---: | ---: |
+| 手机 | ¥2999 | 120 |
+| 电脑 | ¥6999 | 50 |
+
+### 复杂表格
+| 季度 | 产品 | 销售额 | 同比增长 |
+| ---- | ---- | ---- | ---- |
+| **2023 Q1** | 产品A | ¥1,200,000 | +15% |
+|  | 产品B | ¥800,000 | +8% |
+| **2023 Q2** | 产品A | ¥1,500,000 | +25% |
+|  | 产品B | ¥950,000 | +18% |
+`;
+
+    const latexTableExample = `## LaTeX表格示例
+
+### 基本LaTeX表格
+\\begin{tabular}{|l|c|r|}
+\\hline
+\\textbf{左对齐} & \\textbf{居中对齐} & \\textbf{右对齐} \\\\
+\\hline
+数据1 & 100 & 1000 \\\\
+数据2 & 200 & 2000 \\\\
+数据3 & 300 & 3000 \\\\
+\\hline
+\\end{tabular}
+
+### 使用booktabs风格的表格
+\\begin{tabular}{lcr}
+\\toprule
+\\textbf{左对齐} & \\textbf{居中对齐} & \\textbf{右对齐} \\\\
+\\midrule
+数据1 & 100 & 1000 \\\\
+数据2 & 200 & 2000 \\\\
+数据3 & 300 & 3000 \\\\
+\\bottomrule
+\\end{tabular}
+
+### 带有合并单元格的表格
+\\begin{tabular}{|l|c|c|c|}
+\\hline
+\\textbf{项目} & \\multicolumn{3}{c|}{\\textbf{季度数据}} \\\\
+\\hline
+& \\textbf{Q1} & \\textbf{Q2} & \\textbf{Q3} \\\\
+\\hline
+销售额 & ¥10,000 & ¥12,500 & ¥15,000 \\\\
+\\hline
+利润率 & 15\\% & 18\\% & 20\\% \\\\
+\\hline
+\\end{tabular}
+
+### 科学数据表格
+\\begin{tabular}{lrrr}
+\\toprule
+\\textbf{元素} & \\textbf{原子序数} & \\textbf{原子量} & \\textbf{密度(g/cm$^3$)} \\\\
+\\midrule
+氢 & 1 & 1.008 & 0.00009 \\\\
+碳 & 6 & 12.011 & 2.267 \\\\
+铁 & 26 & 55.845 & 7.874 \\\\
+金 & 79 & 196.967 & 19.30 \\\\
+\\bottomrule
+\\end{tabular}
+`;
+
+    const combinedExample = `# 数据分析报告
+
+## 1. 公式解释
+我们使用以下公式计算标准差:
+
+$$\\sigma = \\sqrt{\\frac{1}{N} \\sum_{i=1}^{N} (x_i - \\mu)^2}$$
+
+其中 $\\mu$ 是平均值:
+
+$$\\mu = \\frac{1}{N} \\sum_{i=1}^{N} x_i$$
+
+## 2. 实验数据
+| 实验组 | 样本数量 | 平均值 $\\mu$ | 标准差 $\\sigma$ | p值 |
+| :------ | :------: | :------: | :------: | :------: |
+| 对照组 | 100 | 24.5 | $\\pm 2.3$ | - |
+| 实验组A | 85 | 28.7 | $\\pm 1.9$ | $p < 0.01$ |
+| 实验组B | 90 | 26.2 | $\\pm 2.1$ | $p < 0.05$ |
+
+## 3. 回归模型
+多元线性回归模型:
+
+$$y = \\beta_0 + \\beta_1 x_1 + \\beta_2 x_2 + ... + \\beta_n x_n + \\varepsilon$$
+
+## 4. 模型评估结果 (Markdown表格)
+| 评估指标 | 线性回归 | 随机森林 | 神经网络 |
+| ---- | :---: | :---: | :---: |
+| RMSE | 0.35 | 0.28 | 0.22 |
+| $R^2$ | 0.82 | 0.89 | 0.94 |
+| 训练时间(秒) | 1.2 | 15.6 | 42.8 |
+
+## 5. 模型比较 (LaTeX表格)
+\\begin{tabular}{lccc}
+\\toprule
+\\textbf{模型} & \\textbf{准确率} & \\textbf{召回率} & \\textbf{F1分数} \\\\
+\\midrule
+SVM & 0.865 & 0.878 & 0.871 \\\\
+随机森林 & 0.892 & 0.901 & 0.896 \\\\
+深度神经网络 & 0.934 & 0.927 & 0.930 \\\\
+\\bottomrule
+\\end{tabular}
+`;
+
+    // 设置示例按钮
+    exampleMathBtn.addEventListener('click', () => {
+      inputEl.value = mathExample;
+      renderContent();
+    });
+    
+    exampleTableBtn.addEventListener('click', () => {
+      inputEl.value = tableExample;
+      renderContent();
+    });
+    
+    exampleLatexTablesBtn.addEventListener('click', () => {
+      inputEl.value = latexTableExample;
+      renderContent();
+    });
+    
+    exampleCombinedBtn.addEventListener('click', () => {
+      inputEl.value = combinedExample;
+      renderContent();
+    });
+    
+    // 初始加载时渲染空内容
+    renderContent();
+  })();
+  </script>
+</body>
+</html>
+```
+</copilot-edited-file>
