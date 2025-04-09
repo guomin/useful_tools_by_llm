@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG转GIF工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .input-area, .preview-area, .output-area {
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+        }
+        .preview-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .preview-svg, .preview-gif {
+            flex: 1;
+            border: 1px dashed #aaa;
+            padding: 10px;
+            text-align: center;
+        }
+        img {
+            max-width: 100%;
+            max-height: 300px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .controls {
+            margin-top: 10px;
+        }
+        .file-input {
+            margin-bottom: 10px;
+        }
+        .loading {
+            display: none;
+            color: #666;
+        }
+        .error {
+            color: #f44336;
+            margin-top: 10px;
+            display: none;
+        }
+        .settings {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .setting-group {
+            margin-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>SVG 转 GIF 工具</h1>
+    <div class="container">
+        <div class="input-area">
+            <h2>输入 SVG</h2>
+            <div class="file-input">
+                <input type="file" id="svgFile" accept=".svg" 
+                       title="选择要上传的SVG文件" aria-label="选择SVG文件">
+                <button id="loadFile">加载SVG文件</button>
+            </div>
+            <p>或直接粘贴SVG代码:</p>
+            <textarea id="svgInput" placeholder="在此粘贴SVG代码..." 
+                      title="粘贴SVG代码" aria-label="SVG代码输入区域"></textarea>
+            <div class="controls">
+                <button id="loadSvg">预览SVG</button>
+                <button id="clearInput">清空</button>
+            </div>
+        </div>
+
+        <div class="preview-area">
+            <h2>预览和设置</h2>
+            <div class="settings">
+                <div class="setting-group">
+                    <label for="frameCount">动画帧数:</label>
+                    <input type="number" id="frameCount" min="2" max="100" value="20" 
+                           title="设置GIF动画的总帧数" aria-label="动画帧数">
+                </div>
+                <div class="setting-group">
+                    <label for="width">宽度 (像素):</label>
+                    <input type="number" id="width" min="1" max="2000" value="400" 
+                           title="设置GIF的宽度" aria-label="宽度，像素">
+                </div>
+                <div class="setting-group">
+                    <label for="height">高度 (像素):</label>
+                    <input type="number" id="height" min="1" max="2000" value="400"
+                           title="设置GIF的高度" aria-label="高度，像素">
+                </div>
+                <div class="setting-group">
+                    <label for="quality">质量 (1-10):</label>
+                    <input type="number" id="quality" min="1" max="10" value="5"
+                           title="设置GIF的质量，1为最低，10为最高" aria-label="质量，范围1到10">
+                </div>
+                <div class="setting-group">
+                    <label for="delay">帧延迟 (ms):</label>
+                    <input type="number" id="delay" min="10" max="1000" value="100"
+                           title="设置每帧之间的延迟时间，以毫秒为单位" aria-label="帧延迟，毫秒">
+                </div>
+                <div class="setting-group">
+                    <label for="repeat">重复次数 (0=无限):</label>
+                    <input type="number" id="repeat" min="0" max="100" value="0"
+                           title="设置GIF循环播放的次数，0表示无限循环" aria-label="重复次数，0表示无限">
+                </div>
+            </div>
+
+            <div class="preview-container">
+                <div class="preview-svg">
+                    <h3>SVG 预览</h3>
+                    <div id="svgPreview"></div>
+                </div>
+                <div class="preview-gif">
+                    <h3>GIF 预览</h3>
+                    <div id="gifPreview"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <button id="generateGif">生成GIF</button>
+                <span class="loading" id="loading">处理中，请稍候...</span>
+            </div>
+            <div class="error" id="errorMsg"></div>
+        </div>
+
+        <div class="output-area">
+            <h2>下载</h2>
+            <button id="downloadGif" disabled>下载GIF</button>
+            <span id="gifSize"></span>
+        </div>
+    </div>
+
+    <!-- 内联 GIF.js 代码以避免 Worker 问题 -->
+    <script src="./gif.js"></script>
+    <!-- 添加用于内联 Worker 的脚本 -->
+    <script>
+        // 提前定义错误处理函数，确保它们在使用前已可用
+        function showError(message) {
+            const errorMsg = document.getElementById('errorMsg');
+            if (errorMsg) {
+                errorMsg.textContent = message;
+                errorMsg.style.display = 'block';
+            } else {
+                console.error('错误信息：', message);
+                alert(message);
+            }
+        }
+        
+        function hideError() {
+            const errorMsg = document.getElementById('errorMsg');
+            if (errorMsg) {
+                errorMsg.style.display = 'none';
+            }
+        }
+
+        // 创建一个内联的 Worker 代码 - 从 gif.worker.js 复制来的
+        const gifWorkerBlob = new Blob([`
+            // Worker 代码 
+            ${document.querySelector('script[src="./gif.js"]').textContent}
+
+            // 从 gif.worker.js 获取的主要功能
+            var renderFrame = function(frame) {
+                var encoder, page, stream, transfer;
+                encoder = new GIFEncoder(frame.width, frame.height);
+                
+                if (frame.index === 0) {
+                    encoder.writeHeader();
+                } else {
+                    encoder.firstFrame = false;
+                }
+                
+                encoder.setTransparent(frame.transparent);
+                encoder.setRepeat(frame.repeat);
+                encoder.setDelay(frame.delay);
+                encoder.setQuality(frame.quality);
+                encoder.setDither(frame.dither);
+                encoder.setGlobalPalette(frame.globalPalette);
+                encoder.addFrame(frame.data);
+                
+                if (frame.last) {
+                    encoder.finish();
+                }
+                
+                if (frame.globalPalette === true) {
+                    frame.globalPalette = encoder.getGlobalPalette();
+                }
+                
+                stream = encoder.stream();
+                frame.data = stream.pages;
+                frame.cursor = stream.cursor;
+                frame.pageSize = stream.constructor.pageSize;
+                
+                if (frame.canTransfer) {
+                    transfer = (function() {
+                        var i, len, ref, results;
+                        ref = frame.data;
+                        results = [];
+                        for (i = 0, len = ref.length; i < len; i++) {
+                            page = ref[i];
+                            results.push(page.buffer);
+                        }
+                        return results;
+                    })();
+                    self.postMessage(frame, transfer);
+                } else {
+                    self.postMessage(frame);
+                }
+            };
+
+            self.onmessage = function(event) {
+                return renderFrame(event.data);
+            };
+        `], { type: 'application/javascript' });
+
+        // 创建一个 URL 用于 Worker
+        const gifWorkerUrl = URL.createObjectURL(gifWorkerBlob);
+        
+        // 修改 GIF 构造函数，使用我们的自定义 Worker URL
+        const originalGIF = window.GIF;
+        window.GIF = function(options) {
+            options = options || {};
+            if (!options.workerScript) {
+                options.workerScript = gifWorkerUrl;
+            }
+            return new originalGIF(options);
+        };
+        window.GIF.prototype = originalGIF.prototype;
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 元素引用
+            const svgFileInput = document.getElementById('svgFile');
+            const loadFileBtn = document.getElementById('loadFile');
+            const svgInput = document.getElementById('svgInput');
+            const loadSvgBtn = document.getElementById('loadSvg');
+            const clearInputBtn = document.getElementById('clearInput');
+            const generateGifBtn = document.getElementById('generateGif');
+            const downloadGifBtn = document.getElementById('downloadGif');
+            const svgPreview = document.getElementById('svgPreview');
+            const gifPreview = document.getElementById('gifPreview');
+            const loading = document.getElementById('loading');
+            const errorMsg = document.getElementById('errorMsg');
+            const gifSize = document.getElementById('gifSize');
+            
+            // 设置输入
+            const frameCount = document.getElementById('frameCount');
+            const width = document.getElementById('width');
+            const height = document.getElementById('height');
+            const quality = document.getElementById('quality');
+            const delay = document.getElementById('delay');
+            const repeat = document.getElementById('repeat');
+            
+            // 存储生成的gif
+            let generatedGifUrl = null;
+            
+            // 加载SVG文件
+            loadFileBtn.addEventListener('click', function() {
+                if (svgFileInput.files.length === 0) {
+                    showError('请先选择一个SVG文件');
+                    return;
+                }
+                
+                const file = svgFileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    svgInput.value = e.target.result;
+                    loadSvg();
+                };
+                reader.onerror = function() {
+                    showError('读取文件错误');
+                };
+                reader.readAsText(file);
+            });
+            
+            // 加载SVG预览
+            loadSvgBtn.addEventListener('click', loadSvg);
+            
+            function loadSvg() {
+                const svgCode = svgInput.value.trim();
+                if (!svgCode) {
+                    showError('请输入或上传SVG代码');
+                    return;
+                }
+                
+                try {
+                    // 检查并清理SVG代码中的潜在恶意内容
+                    const cleanSvgCode = sanitizeSvgCode(svgCode);
+                    svgPreview.innerHTML = cleanSvgCode;
+                    hideError();
+                } catch (e) {
+                    showError('SVG代码无效: ' + e.message);
+                }
+            }
+            
+            // 新增：清理SVG代码的函数
+            function sanitizeSvgCode(svgCode) {
+                try {
+                    // 创建一个临时的DOM元素来解析SVG
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(svgCode, 'image/svg+xml');
+                    
+                    // 检查解析错误
+                    const parserError = doc.querySelector('parsererror');
+                    if (parserError) {
+                        console.error('SVG解析错误:', parserError.textContent);
+                        throw new Error('SVG解析错误：' + parserError.textContent);
+                    }
+                    
+                    // 检查是否有SVG元素
+                    const svgElement = doc.querySelector('svg');
+                    if (!svgElement) {
+                        console.error('无法找到SVG根元素');
+                        return svgCode; // 直接返回原始代码，让后续逻辑处理错误
+                    }
+                    
+                    // 移除所有script标签
+                    const scripts = doc.querySelectorAll('script');
+                    scripts.forEach(script => script.remove());
+                    
+                    // 移除所有外部引用 (href, xlink:href 等包含 http/https 的属性)
+                    const allElements = doc.querySelectorAll('*');
+                    const dangerousAttrs = ['href', 'xlink:href', 'src', 'data'];
+                    const dangerousDomains = [
+                        'liveupdt.com', 'javascript:', 'data:javascript', 'vbscript:'
+                    ];
+                    
+                    allElements.forEach(el => {
+                        // 检查所有属性
+                        for (let i = 0; i < el.attributes.length; i++) {
+                            const attr = el.attributes[i];
+                            const attrName = attr.name.toLowerCase();
+                            const attrValue = attr.value.toLowerCase();
+                            
+                            // 检查危险属性或属性值
+                            if (dangerousAttrs.includes(attrName)) {
+                                // 检查是否包含危险域名
+                                if (dangerousDomains.some(domain => attrValue.includes(domain))) {
+                                    el.removeAttribute(attr.name);
+                                    console.warn('已移除可疑引用:', attr.value);
+                                }
+                                
+                                // 如果是外部资源但不是data:image
+                                if ((attrValue.startsWith('http:') || attrValue.startsWith('https:') || 
+                                     attrValue.startsWith('//')) && 
+                                    !attrValue.startsWith('data:image/')) {
+                                    el.removeAttribute(attr.name);
+                                    console.warn('已移除外部资源引用:', attr.value);
+                                }
+                            }
+                            
+                            // 检查事件处理程序
+                            if (attrName.startsWith('on')) {
+                                el.removeAttribute(attr.name);
+                                console.warn('已移除事件处理程序:', attr.name);
+                            }
+                        }
+                    });
+                    
+                    // 返回清理后的SVG代码
+                    const cleanedCode = new XMLSerializer().serializeToString(doc.documentElement);
+                    return cleanedCode;
+                } catch (e) {
+                    console.error('清理SVG代码时出错:', e);
+                    return svgCode; // 出错时返回原始代码
+                }
+            }
+            
+            // 生成GIF
+            generateGifBtn.addEventListener('click', function() {
+                console.log('生成GIF按钮被点击');
+                
+                if (!svgPreview.firstChild) {
+                    console.log('没有找到SVG预览内容');
+                    showError('请先预览SVG');
+                    return;
+                }
+                
+                const svgElement = svgPreview.querySelector('svg');
+                if (!svgElement) {
+                    console.log('无法找到SVG元素');
+                    showError('无法找到有效的SVG元素');
+                    return;
+                }
+                
+                console.log('找到SVG元素，开始生成GIF');
+                generateGif(svgElement);
+            });
+            
+            function generateGif(svgElement) {
+                console.log('开始生成GIF，SVG元素:', svgElement);
+                // 清理之前的数据
+                if (generatedGifUrl) {
+                    URL.revokeObjectURL(generatedGifUrl);
+                    gifPreview.innerHTML = '';
+                }
+                
+                loading.style.display = 'inline';
+                hideError();
+                downloadGifBtn.disabled = true;
+                gifSize.textContent = '';
+                
+                // 创建一张临时canvas来绘制SVG
+                const canvas = document.createElement('canvas');
+                canvas.width = parseInt(width.value, 10) || 400;
+                canvas.height = parseInt(height.value, 10) || 400;
+                const ctx = canvas.getContext('2d');
+                
+                try {
+                    // 准备SVG数据 - 确保再次清理
+                    let svgData = new XMLSerializer().serializeToString(svgElement);
+                    console.log('SVG数据长度:', svgData.length);
+                    svgData = sanitizeSvgCode(svgData);
+                    console.log('清理后SVG数据长度:', svgData.length);
+                    
+                    // 确保SVG有正确的XML声明和命名空间
+                    if (!svgData.includes('xmlns')) {
+                        svgData = svgData.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+                    }
+                    
+                    // 使用更安全的方法创建SVG图像
+                    renderSvgToGif(svgData, canvas, ctx);
+                } catch (e) {
+                    loading.style.display = 'none';
+                    showError('SVG处理错误: ' + e.toString());
+                    console.error('SVG处理错误', e);
+                }
+            }
+            
+            function renderSvgToGif(svgData, canvas, ctx) {
+                console.log('渲染SVG到GIF, 数据长度:', svgData.length);
+                
+                try {
+                    const img = new Image();
+                    
+                    img.onerror = function(e) {
+                        console.error('SVG加载错误详情:', e);
+                        loading.style.display = 'none';
+                        showError('无法加载SVG图像，请检查SVG代码是否有效');
+                    };
+                    
+                    img.onload = function() {
+                        console.log('SVG图像已加载, 尺寸:', img.width, 'x', img.height);
+                        createGifFromImage(img, canvas, ctx);
+                    };
+                    
+                    // 使用 try-catch 包装 base64 编码过程
+                    try {
+                        const svgBase64 = btoa(unescape(encodeURIComponent(svgData)));
+                        img.src = 'data:image/svg+xml;base64,' + svgBase64;
+                        console.log('SVG图像URL已设置');
+                    } catch (encodeError) {
+                        console.error('SVG编码错误:', encodeError);
+                        
+                        // 回退方法：直接使用SVG数据
+                        const safeData = svgData.replace(/"/g, "'");
+                        img.src = 'data:image/svg+xml,' + encodeURIComponent(safeData);
+                        console.log('使用备用编码方法');
+                    }
+                } catch (ex) {
+                    loading.style.display = 'none';
+                    showError('SVG编码错误: ' + ex.toString());
+                    console.error('SVG编码错误', ex);
+                }
+            }
+
+            function createGifFromImage(img, canvas, ctx) {
+                // 创建一个简单的直接方法来生成 GIF - 彻底避开复杂的多帧处理和 gif.js 的问题
+                console.log('使用简化方法创建 GIF');
+                
+                // 把 SVG 直接绘制到Canvas，然后将Canvas转换为静态PNG图片
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // 计算缩放和位置
+                const scaleFactor = Math.min(
+                    (canvas.width * 0.8) / img.width,
+                    (canvas.height * 0.8) / img.height
+                );
+                const drawWidth = img.width * scaleFactor;
+                const drawHeight = img.height * scaleFactor;
+                const x = (canvas.width - drawWidth) / 2;
+                const y = (canvas.height - drawHeight) / 2;
+                
+                // 先绘制一个干净的图像，用于回退
+                ctx.drawImage(img, x, y, drawWidth, drawHeight);
+                console.log('已经绘制基础图像到画布');
+                
+                // 为保险起见，马上创建一个静态PNG
+                try {
+                    const pngUrl = canvas.toDataURL('image/png');
+                    console.log('创建了PNG备用图像');
+                    
+                    // 创建一个简单的动画GIF，自己帧处理逻辑
+                    createSimpleGif(img, canvas, ctx, drawWidth, drawHeight);
+                    
+                    // 如果 GIF 创建失败，至少显示 PNG
+                    setTimeout(() => {
+                        if (gifPreview.innerHTML === '') {
+                            console.log('GIF创建超时，使用PNG备份');
+                            const pngImg = document.createElement('img');
+                            pngImg.src = pngUrl;
+                            gifPreview.innerHTML = '';
+                            gifPreview.appendChild(pngImg);
+                            
+                            // 启用下载功能
+                            generatedGifUrl = pngUrl;
+                            downloadGifBtn.disabled = false;
+                            gifSize.textContent = '(PNG格式备份)';
+                            loading.style.display = 'none';
+                        }
+                    }, 10000); // 10秒后检查是否需要备用方案
+                } catch (e) {
+                    console.error('创建PNG备份失败', e);
+                }
+            }
+            
+            // 添加新的可靠 GIF 生成方法 - 简化版本
+            function createSimpleGif(img, canvas, ctx, drawWidth, drawHeight) {
+                // 降低复杂度 - 进一步减少帧数
+                const frames = Math.min(parseInt(frameCount.value, 10) || 20, 8); // 限制最多8帧
+                const delayTime = parseInt(delay.value, 10) || 100;
+                
+                console.log(`正在生成超简化版GIF，帧数: ${frames}`);
+                
+                // 使用单个canvas循环处理
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // 直接使用图片数据，避免复杂的canvas处理
+                const frameImages = [];
+                
+                // 先显示静态图
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, (canvas.width - drawWidth) / 2, (canvas.height - drawHeight) / 2, drawWidth, drawHeight);
+                
+                try {
+                    // 立即创建并显示静态图像
+                    const staticUrl = canvas.toDataURL('image/png');
+                    const staticImg = new Image();
+                    staticImg.src = staticUrl;
+                    gifPreview.innerHTML = '';
+                    gifPreview.appendChild(staticImg);
+                    generatedGifUrl = staticUrl;
+                    downloadGifBtn.disabled = false;
+                    gifSize.textContent = '(静态PNG，GIF生成中...)';
+                } catch (e) {
+                    console.error('创建静态预览失败', e);
+                }
+                
+                // 逐帧生成预览图 - 使用更简单的处理方式
+                for (let i = 0; i < frames; i++) {
+                    // 清除画布
+                    tempCtx.fillStyle = '#ffffff';
+                    tempCtx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // 绘制旋转的SVG，降低复杂度
+                    const angle = (i / frames) * Math.PI * 2;
+                    tempCtx.save();
+                    tempCtx.translate(canvas.width / 2, canvas.height / 2);
+                    tempCtx.rotate(angle);
+                    tempCtx.translate(-drawWidth / 2, -drawHeight / 2);
+                    tempCtx.drawImage(img, 0, 0, drawWidth, drawHeight);
+                    tempCtx.restore();
+
+                    // 保存为图片数据 - 使用更低质量的设置
+                    try {
+                        const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.7); // 使用JPEG而不是PNG以降低大小
+                        const frameImg = new Image();
+                        frameImg.src = dataUrl;
+                        frameImages.push(frameImg);
+                    } catch (e) {
+                        console.error('生成帧图像失败', e);
+                    }
+                    
+                    // 更新加载状态
+                    loading.textContent = `创建帧 ${i+1}/${frames}...`;
+                }
+                
+                try {
+                    // 使用超简化设置
+                    const gif = new GIF({
+                        workers: 0,
+                        quality: 1,  // 最低质量以确保处理速度
+                        width: Math.min(canvas.width, 300),  // 限制尺寸
+                        height: Math.min(canvas.height, 300),
+                        repeat: 0,
+                        dither: false,  // 关闭抖动
+                        workerScript: null  // 避免使用workers
+                    });
+                    
+                    // 添加进度和完成事件监听
+                    gif.on('finished', function(blob) {
+                        console.log('GIF完成！大小:', blob.size, '字节');
+                        
+                        // 确保静态图被GIF替换
+                        if (blob.size > 0) {
+                            const url = URL.createObjectURL(blob);
+                            generatedGifUrl = url;
+                            
+                            const gifImg = new Image();
+                            gifImg.onload = function() {
+                                console.log('GIF预览加载成功');
+                                gifPreview.innerHTML = '';
+                                gifPreview.appendChild(gifImg);
+                                
+                                const size = (blob.size / 1024).toFixed(2);
+                                gifSize.textContent = `文件大小: ${size} KB`;
+                            };
+                            
+                            gifImg.onerror = function() {
+                                console.error('GIF加载失败');
+                            };
+                            
+                            gifImg.src = url;
+                        }
+                        
+                        loading.style.display = 'none';
+                    });
+                    
+                    // 直接一次添加所有帧
+                    setTimeout(() => {
+                        try {
+                            console.log('开始添加帧到GIF');
+                            loading.textContent = '正在处理GIF...';
+                            
+                            // 仅使用前几个关键帧
+                            const keyFrames = Math.min(frameImages.length, 5); // 最多使用5帧
+                            for (let i = 0; i < keyFrames; i++) {
+                                gif.addFrame(frameImages[i], {delay: delayTime});
+                                console.log(`已添加第${i+1}帧`);
+                            }
+                            
+                            console.log('开始渲染GIF');
+                            loading.textContent = '正在渲染GIF (可能需要较长时间)...';
+                            gif.render();
+                        } catch (e) {
+                            console.error('GIF处理失败', e);
+                            loading.style.display = 'none';
+                        }
+                    }, 1000);
+                    
+                } catch (e) {
+                    console.error('创建GIF失败，使用静态图像代替', e);
+                    loading.style.display = 'none';
+                }
+                
+                // 显著增加超时时间
+                setTimeout(() => {
+                    if (loading.style.display === 'inline') {
+                        console.log('GIF处理超时，保留静态图像');
+                        loading.style.display = 'none';
+                        showError('GIF生成超时，已使用静态图像代替。如需生成GIF，请尝试减少图像尺寸或帧数。');
+                    }
+                }, 60000);  // 增加到60秒超时
+            }
+            
+            // 替换修改下载按钮的处理
+            downloadGifBtn.addEventListener('click', function() {
+                if (!generatedGifUrl) {
+                    showError('请先生成图像');
+                    return;
+                }
+                
+                try {
+                    console.log('开始下载图像...');
+                    // 创建一个隐形的链接并手动触发点击
+                    const link = document.createElement('a');
+                    link.href = generatedGifUrl;
+                    
+                    // 根据URL类型决定扩展名
+                    const isDataUrl = generatedGifUrl.startsWith('data:');
+                    const isPng = isDataUrl && generatedGifUrl.includes('image/png');
+                    
+                    link.download = isPng ? 'animation.png' : 'animation.gif';
+                    
+                    // 某些浏览器需要链接在DOM中
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    console.log('下载链接已触发');
+                } catch (e) {
+                    console.error('下载过程中发生错误:', e);
+                    showError('下载失败: ' + e.toString());
+                    
+                    // 提供备用下载方法
+                    alert('直接下载失败，请右键点击图像并选择"图片另存为..."');
+                }
+            });
+            
+            // 在界面上添加更明显的提示
+            document.addEventListener('DOMContentLoaded', function() {
+                gifPreview.addEventListener('contextmenu', function(e) {
+                    if (generatedGifUrl) {
+                        console.log('用户在预览上右键点击');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
