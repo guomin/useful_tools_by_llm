@@ -176,3 +176,5 @@ cython_debug/
 # add by me
 others/data/
 others/screenshots/
+google_scholar*.csv
+proxy_pool.json

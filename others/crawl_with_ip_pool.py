@@ -226,8 +226,6 @@ class ProxyPool:
             self.save_proxies()
 
 
-
-
 class DoubanCrawler:
     """豆瓣电影爬虫类"""
     
@@ -392,6 +390,455 @@ class DoubanCrawler:
         return True
 
 
+class GoogleCrawler:
+    """Google搜索爬虫类"""
+    
+    def __init__(self, proxy_pool):
+        self.proxy_pool = proxy_pool
+        self.base_url = "https://www.google.com/search"
+        self.results = []
+    
+    def search(self, query, num_pages=1):
+        """执行Google搜索并获取结果"""
+        for page in range(num_pages):
+            start = page * 10
+            params = {
+                'q': query,
+                'start': start
+            }
+            
+            results = self.fetch_page(params)
+            if results:
+                self.results.extend(results)
+                # 随机延迟
+                sleep_time = random.uniform(2, 5)
+                logger.info(f"页面 {page + 1} 爬取完成，休息 {sleep_time:.2f} 秒")
+                time.sleep(sleep_time)
+            else:
+                break
+        
+        return self.results
+
+    def fetch_page(self, params):
+        """获取单页搜索结果"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            proxy = self.proxy_pool.get_random_proxy()
+            if not proxy:
+                logger.warning("无可用代理，直接连接")
+                proxies = None
+            else:
+                protocol = proxy.split('://')[0]
+                proxies = {protocol: proxy}
+            
+            try:
+                headers = {
+                    "User-Agent": self.proxy_pool.get_random_user_agent(),
+                    "Accept": "text/html",
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+                
+                response = requests.get(
+                    self.base_url,
+                    params=params,
+                    headers=headers,
+                    proxies=proxies,
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    return self.parse_results(response.text)
+                else:
+                    logger.warning(f"请求失败，状态码: {response.status_code}")
+                    if proxy:
+                        self.proxy_pool.remove_proxy(proxy)
+                    retry_count += 1
+                    time.sleep(2)
+            
+            except Exception as e:
+                logger.error(f"请求出错: {e}")
+                if proxy:
+                    self.proxy_pool.remove_proxy(proxy)
+                retry_count += 1
+                time.sleep(2)
+        
+        return []
+
+    def parse_results(self, html):
+        """解析Google搜索结果页面"""
+        results = []
+        soup = BeautifulSoup(html, 'html.parser')
+        logger.info("开始解析搜索结果")
+        logger.info(f"html: {html}")
+        
+        # 查找所有搜索结果div
+        search_results = soup.select('div.g')
+        
+        for result in search_results:
+            try:
+                # 标题和链接
+                title_elem = result.select_one('h3')
+                title = title_elem.text if title_elem else ""
+                
+                link_elem = result.select_one('a')
+                link = link_elem['href'] if link_elem else ""
+                
+                # 摘要
+                snippet_elem = result.select_one('div.VwiC3b')
+                snippet = snippet_elem.text if snippet_elem else ""
+                
+                if title and link:
+                    results.append({
+                        'title': title,
+                        'link': link,
+                        'snippet': snippet
+                    })
+                
+            except Exception as e:
+                logger.error(f"解析搜索结果出错: {e}")
+                continue
+        
+        logger.info(f"解析到 {len(results)} 条搜索结果")
+        return results
+
+    def save_to_csv(self, filename="google_results.csv"):
+        """将搜索结果保存为CSV文件"""
+        if not self.results:
+            logger.warning("没有数据可保存")
+            return False
+        
+        df = pd.DataFrame(self.results)
+        df.to_csv(filename, index=False, encoding='utf-8-sig')
+        logger.info(f"数据已保存至 {filename}")
+        return True
+
+
+class GoogleScholarCrawler:
+    """Google Scholar 学者搜索爬虫类"""
+    
+    def __init__(self, proxy_pool):
+        self.proxy_pool = proxy_pool
+        self.base_url = "https://scholar.google.com/scholar"
+        self.profile_base_url = "https://scholar.google.com/citations"
+        self.results = []
+        self.scholar_profiles = []
+    
+    def search(self, query, num_pages=1):
+        """执行Google Scholar搜索并获取结果"""
+        for page in range(num_pages):
+            start = page * 10
+            params = {
+                'q': query,
+                'start': start,
+                'hl': 'en'  # 设置语言为英文
+            }
+            
+            results = self.fetch_page(params)
+            if results:
+                self.results.extend(results)
+                # 随机延迟
+                sleep_time = random.uniform(3, 7)
+                logger.info(f"页面 {page + 1} 爬取完成，休息 {sleep_time:.2f} 秒")
+                time.sleep(sleep_time)
+            else:
+                break
+        
+        return self.results
+
+    def search_authors(self, query, num_pages=1):
+        """搜索学者信息"""
+        logger.info(f"开始搜索学者: {query}")
+        
+        params = {
+            'view_op': 'search_authors',
+            'mauthors': query,
+            'hl': 'en',
+            'oi': 'ao'
+        }
+        
+        author_profiles = self.fetch_author_profiles(params)
+        if author_profiles:
+            self.scholar_profiles.extend(author_profiles)
+            logger.info(f"找到 {len(author_profiles)} 位匹配的学者")
+        
+        return self.scholar_profiles
+    
+    def fetch_author_profiles(self, params):
+        """获取学者个人资料页面"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            proxy = self.proxy_pool.get_random_proxy()
+            if not proxy:
+                logger.warning("无可用代理，直接连接")
+                proxies = None
+            else:
+                protocol = proxy.split('://')[0]
+                proxies = {protocol: proxy}
+            
+            try:
+                headers = {
+                    "User-Agent": self.proxy_pool.get_random_user_agent(),
+                    "Accept": "text/html",
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+                
+                logger.info(f"正在请求 Google Scholar 学者信息，使用代理: {proxy}")
+                
+                response = requests.get(
+                    self.profile_base_url,
+                    params=params,
+                    headers=headers,
+                    proxies=proxies,
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    return self.parse_author_profiles(response.text)
+                else:
+                    logger.warning(f"请求失败，状态码: {response.status_code}")
+                    if proxy:
+                        self.proxy_pool.remove_proxy(proxy)
+                    retry_count += 1
+                    time.sleep(3)
+            
+            except Exception as e:
+                logger.error(f"请求出错: {e}")
+                if proxy:
+                    self.proxy_pool.remove_proxy(proxy)
+                retry_count += 1
+                time.sleep(3)
+        
+        return []
+    
+    def parse_author_profiles(self, html):
+        """解析Google Scholar学者个人资料页面"""
+        profiles = []
+        soup = BeautifulSoup(html, 'html.parser')
+        logger.info("开始解析 Google Scholar 学者信息")
+        
+        # 查找所有学者信息
+        author_blocks = soup.select('div.gs_r')
+        
+        for block in author_blocks:
+            try:
+                # 查找是否含有学者信息区域
+                profile_table = block.select_one('table')
+                if not profile_table:
+                    continue
+                
+                # 提取学者名称
+                name_elem = block.select_one('h4.gs_rt2 a') or block.select_one('h3.gs_rt a')
+                name = name_elem.text.strip() if name_elem else ""
+                
+                # 提取学者ID和个人资料链接
+                profile_url = ""
+                scholar_id = ""
+                if name_elem and name_elem.has_attr('href'):
+                    profile_url = "https://scholar.google.com" + name_elem['href']
+                    # 从URL中提取学者ID
+                    import re
+                    id_match = re.search(r'user=([^&]+)', profile_url)
+                    if id_match:
+                        scholar_id = id_match.group(1)
+                
+                # 提取所属机构
+                affiliation_elem = block.select_one('div.gs_nph')
+                affiliation = affiliation_elem.text.strip() if affiliation_elem else ""
+                
+                # 提取邮箱验证状态
+                email_elem = block.select_one('div:nth-of-type(2)')
+                verified_email = ""
+                if email_elem:
+                    email_text = email_elem.text.strip()
+                    if "Verified email at" in email_text:
+                        verified_email = email_text.replace("Verified email at", "").strip()
+                
+                # 提取被引用次数
+                citation_elem = block.select_one('div:nth-of-type(3)')
+                citations = ""
+                if citation_elem:
+                    citation_text = citation_elem.text.strip()
+                    if "Cited by" in citation_text:
+                        citations = citation_text.replace("Cited by", "").strip()
+                
+                if name:
+                    profiles.append({
+                        'name': name,
+                        'scholar_id': scholar_id,
+                        'affiliation': affiliation,
+                        'verified_email': verified_email,
+                        'citations': citations,
+                        'profile_url': profile_url
+                    })
+            
+            except Exception as e:
+                logger.error(f"解析学者信息出错: {e}")
+                continue
+        
+        logger.info(f"解析到 {len(profiles)} 位学者信息")
+        return profiles
+
+    def fetch_page(self, params):
+        """获取单页搜索结果"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            proxy = self.proxy_pool.get_random_proxy()
+            if not proxy:
+                logger.warning("无可用代理，直接连接")
+                proxies = None
+            else:
+                protocol = proxy.split('://')[0]
+                proxies = {protocol: proxy}
+            
+            try:
+                headers = {
+                    "User-Agent": self.proxy_pool.get_random_user_agent(),
+                    "Accept": "text/html",
+                    "Accept-Language": "en-US,en;q=0.9"
+                }
+                
+                logger.info(f"正在请求 Google Scholar，使用代理: {proxy}")
+                
+                response = requests.get(
+                    self.base_url,
+                    params=params,
+                    headers=headers,
+                    proxies=proxies,
+                    timeout=15
+                )
+                
+                if response.status_code == 200:
+                    return self.parse_results(response.text)
+                else:
+                    logger.warning(f"请求失败，状态码: {response.status_code}")
+                    if proxy:
+                        self.proxy_pool.remove_proxy(proxy)
+                    retry_count += 1
+                    time.sleep(3)
+            
+            except Exception as e:
+                logger.error(f"请求出错: {e}")
+                if proxy:
+                    self.proxy_pool.remove_proxy(proxy)
+                retry_count += 1
+                time.sleep(3)
+        
+        return []
+
+    def parse_results(self, html):
+        """解析Google Scholar搜索结果页面"""
+        results = []
+        soup = BeautifulSoup(html, 'html.parser')
+        logger.info("开始解析 Google Scholar 搜索结果")
+        
+        # 查找所有学术文章结果
+        search_results = soup.select('div.gs_r.gs_or.gs_scl')
+        
+        for result in search_results:
+            try:
+                # 文章标题和链接
+                title_elem = result.select_one('h3.gs_rt a')
+                if not title_elem:
+                    title_elem = result.select_one('h3.gs_rt')
+                
+                title = title_elem.text.strip() if title_elem else ""
+                
+                link = ""
+                if title_elem and title_elem.name == 'a' and title_elem.has_attr('href'):
+                    link = title_elem['href']
+                
+                # 作者、期刊和发布日期信息
+                author_elem = result.select_one('.gs_a')
+                author_info = author_elem.text.strip() if author_elem else ""
+                
+                # 摘要
+                snippet_elem = result.select_one('.gs_rs')
+                snippet = snippet_elem.text.strip() if snippet_elem else ""
+                
+                # 引用次数
+                cited_elem = result.select_one('a.gs_or_cit')
+                citations = ""
+                if cited_elem:
+                    citations_text = cited_elem.text.strip()
+                    # 提取数字
+                    import re
+                    citations_match = re.search(r'\d+', citations_text)
+                    if citations_match:
+                        citations = citations_match.group()
+                
+                if title:
+                    results.append({
+                        'title': title,
+                        'link': link,
+                        'author_info': author_info,
+                        'snippet': snippet,
+                        'citations': citations
+                    })
+                
+            except Exception as e:
+                logger.error(f"解析搜索结果出错: {e}")
+                continue
+        
+        # 在原有代码解析完论文后，检查是否有学者个人资料链接
+        author_profiles = soup.select('div.gs_r h3.gs_rt a[href*="citations?view_op=search_authors"]')
+        for profile_link in author_profiles:
+            try:
+                profile_text = profile_link.text.strip()
+                if "User profiles for" in profile_text:
+                    author_name = profile_link.select_one('b')
+                    if author_name:
+                        author_name_text = author_name.text.strip()
+                        logger.info(f"检测到学者个人资料链接: {author_name_text}")
+                        # 获取完整的链接地址
+                        href = profile_link.get('href', '')
+                        if href:
+                            full_url = "https://scholar.google.com" + href
+                            # 将学者链接添加到结果中
+                            results.append({
+                                'author_name': author_name_text,
+                                'profile_link': full_url
+                            })
+                            logger.info(f"学者个人资料链接: {full_url}")
+                            # 提取查询参数
+                            import re
+                            author_query = re.search(r'mauthors=([^&]+)', href)
+                            if author_query:
+                                author_query_text = author_query.group(1)
+                                # 可以选择直接搜索该学者
+                                # self.search_authors(author_query_text)
+            except Exception as e:
+                logger.error(f"解析学者链接出错: {e}")
+        
+        logger.info(f"解析到 {len(results)} 条学术文章")
+        return results
+
+    def save_scholar_profiles_to_csv(self, filename="google_scholar_profiles.csv"):
+        """将学者信息保存为CSV文件"""
+        if not self.scholar_profiles:
+            logger.warning("没有学者数据可保存")
+            return False
+        
+        df = pd.DataFrame(self.scholar_profiles)
+        df.to_csv(filename, index=False, encoding='utf-8-sig')
+        logger.info(f"学者数据已保存至 {filename}")
+        return True
+
+    def save_to_csv(self, filename="google_scholar_results.csv"):
+        """将搜索结果保存为CSV文件"""
+        if not self.results:
+            logger.warning("没有数据可保存")
+            return False
+        
+        df = pd.DataFrame(self.results)
+        df.to_csv(filename, index=False, encoding='utf-8-sig')
+        logger.info(f"数据已保存至 {filename}")
+        return True
 
 def main():
     """主函数"""
@@ -402,14 +849,37 @@ def main():
     if not pool_built and not proxy_pool.proxy_pool:
         logger.error("代理池构建失败且没有可用代理，程序退出")
         return
+
+    # 选择爬虫类型
+    crawler_type = input("请选择爬虫类型 (1: 豆瓣电影 2: Google搜索 3: Google Scholar 4: Google Scholar 学者): ")
     
-    # 即使代理数量不够最低要求，也尝试使用现有代理爬取
-    logger.info("开始爬取豆瓣电影Top250...")
-    crawler = DoubanCrawler(proxy_pool)
-    crawler.crawl_top250()
-    
-    # 保存结果
-    crawler.save_to_csv()
+    if crawler_type == "1":
+        logger.info("开始爬取豆瓣电影Top250...")
+        crawler = DoubanCrawler(proxy_pool)
+        crawler.crawl_top250()
+        crawler.save_to_csv()
+    elif crawler_type == "2":
+        query = input("请输入搜索关键词: ")
+        num_pages = int(input("请输入要爬取的页数: "))
+        logger.info(f"开始Google搜索: {query}")
+        crawler = GoogleCrawler(proxy_pool)
+        crawler.search(query, num_pages)
+        crawler.save_to_csv()
+    elif crawler_type == "3":
+        query = input("请输入要搜索的学者或论文关键词: ")
+        num_pages = int(input("请输入要爬取的页数: "))
+        logger.info(f"开始Google Scholar搜索: {query}")
+        crawler = GoogleScholarCrawler(proxy_pool)
+        crawler.search(query, num_pages)
+        crawler.save_to_csv("google_scholar_results.csv")
+    elif crawler_type == "4":
+        query = input("请输入要搜索的学者名称或机构: ")
+        logger.info(f"开始搜索Google Scholar学者: {query}")
+        crawler = GoogleScholarCrawler(proxy_pool)
+        crawler.search_authors(query)
+        crawler.save_scholar_profiles_to_csv("google_scholar_profiles.csv")
+    else:
+        logger.error("无效的选择")
 
 
 if __name__ == "__main__":
