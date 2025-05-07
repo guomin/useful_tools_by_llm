@@ -11,14 +11,38 @@ def build_exe():
     """使用PyInstaller打包应用程序为EXE文件"""
     print("开始打包PDF工具为可执行文件...")
 
-    # 确保PyInstaller已安装
-    try:
-        import PyInstaller
-        print(f"检测到PyInstaller版本: {PyInstaller.__version__}")
-    except ImportError:
-        print("未检测到PyInstaller，正在安装...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
-        print("PyInstaller安装完成")
+    # 确保必要的依赖已安装
+    required_packages = [
+        "PyInstaller", 
+        "PyPDF2", 
+        "Pillow", 
+        "PyMuPDF", 
+        "ttkthemes"
+    ]
+    
+    for package in required_packages:
+        try:
+            __import__(package.lower())
+            print(f"检测到 {package} 已安装")
+        except ImportError:
+            print(f"未检测到 {package}，尝试安装...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+                print(f"{package} 安装完成")
+            except Exception as e:
+                print(f"安装 {package} 失败: {str(e)}")
+                print("尝试从 requirements_for_build.txt 安装所有依赖...")
+                if os.path.exists("requirements_for_build.txt"):
+                    try:
+                        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements_for_build.txt"])
+                        print("依赖安装完成")
+                        break
+                    except Exception as e:
+                        print(f"安装依赖失败: {str(e)}")
+                        sys.exit(1)
+                else:
+                    print("未找到 requirements_for_build.txt 文件")
+                    sys.exit(1)
 
     # 清理之前的构建文件
     if os.path.exists("build"):
@@ -26,42 +50,51 @@ def build_exe():
     if os.path.exists("dist"):
         shutil.rmtree("dist")
     
-    # 检查是否有图标文件，如果没有尝试创建一个
+    # 检查是否有图标文件，如果没有尝试使用 create_icon.py 创建
     if not os.path.exists("icon.ico"):
         print("未找到icon.ico文件，尝试创建默认图标...")
         try:
-            # 如果有PIL库，尝试创建一个图标
-            from PIL import Image, ImageDraw, ImageFont
-            
-            # 创建一个512x512的图标
-            icon_size = 512
-            icon = Image.new('RGBA', (icon_size, icon_size), (255, 255, 255, 0))
-            draw = ImageDraw.Draw(icon)
-            
-            # 绘制背景
-            draw.rectangle([(0, 0), (icon_size, icon_size)], fill=(52, 152, 219, 255))
-            
-            # 绘制PDF字样
-            try:
-                # 尝试使用一个常见字体
-                font = ImageFont.truetype("arial.ttf", int(icon_size/2))
-            except IOError:
-                # 如果找不到字体，使用默认字体
-                font = ImageFont.load_default()
-            
-            # 在图标中央绘制文字
-            draw.text((icon_size/2, icon_size/2), "PDF", fill=(255, 255, 255, 255), 
-                    font=font, anchor="mm")
-            
-            # 保存为ICO文件
-            icon.save("icon.ico")
-            print("成功创建默认图标")
+            # 优先使用专用的图标创建模块
+            if os.path.exists("create_icon.py"):
+                print("使用 create_icon.py 创建图标...")
+                subprocess.check_call([sys.executable, "create_icon.py"])
+                if os.path.exists("icon.ico"):
+                    print("成功创建默认图标")
+                    use_icon = True
+                else:
+                    raise Exception("图标创建失败")
+            else:
+                # 如果没有专用模块，使用内置方法创建
+                from PIL import Image, ImageDraw, ImageFont
+                
+                # 创建一个512x512的图标
+                icon_size = 512
+                icon = Image.new('RGBA', (icon_size, icon_size), (255, 255, 255, 0))
+                draw = ImageDraw.Draw(icon)
+                
+                # 绘制背景
+                draw.rectangle([(0, 0), (icon_size, icon_size)], fill=(52, 152, 219, 255))
+                
+                # 绘制PDF字样
+                try:
+                    # 尝试使用一个常见字体
+                    font = ImageFont.truetype("arial.ttf", int(icon_size/2))
+                except IOError:
+                    # 如果找不到字体，使用默认字体
+                    font = ImageFont.load_default()
+                
+                # 在图标中央绘制文字
+                draw.text((icon_size/2, icon_size/2), "PDF", fill=(255, 255, 255, 255), 
+                        font=font, anchor="mm")
+                
+                # 保存为ICO文件
+                icon.save("icon.ico")
+                print("成功创建默认图标")
+                use_icon = True
         except Exception as e:
             print(f"创建图标失败: {str(e)}")
             print("将使用无图标方式打包")
             use_icon = False
-        else:
-            use_icon = True
     else:
         use_icon = True
     
@@ -78,7 +111,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['ttkthemes'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -125,7 +158,7 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['ttkthemes'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -167,20 +200,37 @@ exe = EXE(
     print("生成配置文件完成，开始打包...")
     
     # 执行PyInstaller命令
-    subprocess.check_call([
-        sys.executable, 
-        "-m", 
-        "PyInstaller", 
-        "--clean", 
-        "pdf_tool.spec"
-    ])
-    
-    print("\n打包完成! 可执行文件已生成在dist目录中。")
-    print("您可以在dist文件夹中找到 'PDF工具.exe' 文件")
-    print("\n注意事项:")
-    print("1. 首次启动可能较慢，这是正常现象")
-    print("2. 杀毒软件可能会对生成的EXE进行检查，这是因为打包工具的特性")
-    print("3. 确保最终用户电脑上安装了适当的字体，否则可能会影响界面显示")
+    try:
+        subprocess.check_call([
+            sys.executable, 
+            "-m", 
+            "PyInstaller", 
+            "--clean", 
+            "pdf_tool.spec"
+        ])
+        
+        print("\n打包完成! 可执行文件已生成在dist目录中。")
+        print("您可以在dist文件夹中找到 'PDF工具.exe' 文件")
+        
+        # 检查是否成功创建了EXE文件
+        exe_path = os.path.join("dist", "PDF工具.exe")
+        if os.path.exists(exe_path):
+            print(f"\n成功创建可执行文件: {os.path.abspath(exe_path)}")
+            print(f"文件大小: {os.path.getsize(exe_path) / (1024*1024):.2f} MB")
+        else:
+            print("\n警告: 未找到生成的可执行文件，请检查打包过程是否有错误")
+        
+        print("\n注意事项:")
+        print("1. 首次启动可能较慢，这是正常现象")
+        print("2. 杀毒软件可能会对生成的EXE进行检查，这是因为打包工具的特性")
+        print("3. 确保最终用户电脑上安装了适当的字体，否则可能会影响界面显示")
+        print("4. 如果程序无法启动，请尝试安装 Microsoft Visual C++ Redistributable")
+        
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"\n打包失败: {str(e)}")
+        print("请检查上述错误信息，解决问题后重试")
+        return False
 
 if __name__ == "__main__":
     build_exe()
