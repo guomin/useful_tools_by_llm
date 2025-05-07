@@ -1,0 +1,5 @@
+PyInstaller>=5.6.2
+PyPDF2>=2.0.0
+Pillow>=9.0.0
+PyMuPDF>=1.18.0
+ttkthemes>=3.2.0
