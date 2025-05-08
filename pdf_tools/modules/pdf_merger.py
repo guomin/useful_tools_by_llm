@@ -51,6 +51,8 @@ class MergePDFTab:
                        variable=self.page_orientation).pack(side=tk.LEFT)
         ttk.Radiobutton(orientation_frame, text="横向", value="横向", 
                        variable=self.page_orientation).pack(side=tk.LEFT)
+        ttk.Radiobutton(orientation_frame, text="混合", value="混合", 
+                       variable=self.page_orientation).pack(side=tk.LEFT)
         
         # 文件列表
         file_frame = ttk.LabelFrame(self.frame, text="文件列表")
@@ -313,6 +315,7 @@ class MergePDFTab:
         """以A4尺寸合并文件，保持内容原样"""
         # A4尺寸（点）- 确保使用准确的标准尺寸
         is_landscape = self.page_orientation.get() == "横向"
+        is_mixed = self.page_orientation.get() == "混合"
         
         # 根据方向设置A4尺寸（精确值）
         if is_landscape:
@@ -352,8 +355,27 @@ class MergePDFTab:
                     pdf_doc = fitz.open(file_path)
                     for page_num in range(len(pdf_doc)):
                         # 创建新A4页面
+                        # 如果是混合模式，根据原始页面方向决定新页面方向
+                        if is_mixed:
+                            src_page = pdf_doc[page_num]
+                            src_rect = src_page.rect
+                            page_is_landscape = src_rect.width > src_rect.height
+                            
+                            if page_is_landscape:
+                                # 横向A4
+                                page_width = 841.89
+                                page_height = 595.28
+                            else:
+                                # 纵向A4
+                                page_width = 595.28
+                                page_height = 841.89
+                        else:
+                            # 使用全局设置的方向
+                            page_width = a4_width
+                            page_height = a4_height
+                            
                         # 使用整数值避免浮点数问题
-                        new_page = output_pdf.new_page(width=int(a4_width), height=int(a4_height))
+                        new_page = output_pdf.new_page(width=int(page_width), height=int(page_height))
                         
                         # 从源文档获取页面
                         src_page = pdf_doc[page_num]
@@ -401,17 +423,36 @@ class MergePDFTab:
                         background.paste(img, mask=img.split()[3])
                         img = background
                     
-                    # 计算图片与A4页面的比例
+                    # 判断图片方向
                     img_width, img_height = img.size
-                    img_ratio = img_width / img_height
-                    a4_ratio = a4_width / a4_height
                     
-                    # 计算适当的缩放以适应A4
-                    if img_ratio > a4_ratio:  # 图片更宽
-                        new_width = int(a4_width - 40)  # 留出边距，确保转为整数
+                    # 如果是混合模式，根据图片方向决定页面方向
+                    if is_mixed:
+                        page_is_landscape = img_width > img_height
+                        
+                        if page_is_landscape:
+                            # 横向A4
+                            page_width = 841.89
+                            page_height = 595.28
+                        else:
+                            # 纵向A4
+                            page_width = 595.28
+                            page_height = 841.89
+                    else:
+                        # 使用全局设置的方向
+                        page_width = a4_width
+                        page_height = a4_height
+                    
+                    # 计算图片与页面的比例
+                    img_ratio = img_width / img_height
+                    page_ratio = page_width / page_height
+                    
+                    # 计算适当的缩放以适应页面
+                    if img_ratio > page_ratio:  # 图片更宽
+                        new_width = int(page_width - 40)  # 留出边距，确保转为整数
                         new_height = int(new_width / img_ratio)
                     else:  # 图片更高或等比例
-                        new_height = int(a4_height - 40)  # 留出边距，确保转为整数
+                        new_height = int(page_height - 40)  # 留出边距，确保转为整数
                         new_width = int(new_height * img_ratio)
                     
                     # 调整图像大小
@@ -420,10 +461,10 @@ class MergePDFTab:
                     # 将图像转换为临时PDF
                     temp_pdf_path = f"{output_path}.temp_img.pdf"
                     
-                    # 创建A4大小的临时PDF
+                    # 创建页面
                     temp_pdf = fitz.open()
                     # 使用整数值避免浮点数问题
-                    temp_page = temp_pdf.new_page(width=int(a4_width), height=int(a4_height))
+                    temp_page = temp_pdf.new_page(width=int(page_width), height=int(page_height))
                     
                     # 将图像数据转换为PNG字节流
                     img_bytes = io.BytesIO()
@@ -432,10 +473,10 @@ class MergePDFTab:
                     
                     # 插入图像到中心位置，确保使用整数坐标
                     rect = fitz.Rect(
-                        int((a4_width - new_width) / 2),
-                        int((a4_height - new_height) / 2),
-                        int((a4_width + new_width) / 2),
-                        int((a4_height + new_height) / 2)
+                        int((page_width - new_width) / 2),
+                        int((page_height - new_height) / 2),
+                        int((page_width + new_width) / 2),
+                        int((page_height + new_height) / 2)
                     )
                     temp_page.insert_image(rect, stream=img_bytes.getvalue())
                     
@@ -463,44 +504,61 @@ class MergePDFTab:
         # 保存最终合并后的PDF
         output_pdf.save(output_path)
         output_pdf.close()
-    
+
     def merge_auto_adjust(self, output_path):
-        """自动调整尺寸合并文件"""
-        writer = PdfWriter()
-        
-        total_files = len(self.file_paths)
-        total_pages = 0
-        for file_path in self.file_paths:
-            if file_path.lower().endswith('.pdf'):
-                try:
-                    with open(file_path, 'rb') as file:
-                        reader = PdfReader(file)
-                        total_pages += len(reader.pages)
-                except Exception as e:
-                    error_msg = f"无法打开PDF文件 '{os.path.basename(file_path)}': {str(e)}"
-                    self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
-                    raise Exception(f"文件 '{os.path.basename(file_path)}' 不是有效的PDF文件")
-            else:
-                total_pages += 1
-        
-        self.parent.after(0, lambda: self.progress.config(maximum=total_pages))
-        processed_pages = 0
-        
-        for file_path in self.file_paths:
-            self.parent.after(0, lambda p=file_path: self.status_label.config(text=f"处理: {os.path.basename(p)}"))
+            """自动调整尺寸合并文件"""
+            writer = PdfWriter()
             
-            if file_path.lower().endswith('.pdf'):
-                try:
-                    doc = fitz.open(file_path)
-                except Exception as e:
-                    error_msg = f"无法打开PDF文件 '{os.path.basename(file_path)}': {str(e)}"
-                    self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
-                    continue
+            total_files = len(self.file_paths)
+            total_pages = 0
+            for file_path in self.file_paths:
+                if file_path.lower().endswith('.pdf'):
+                    try:
+                        with open(file_path, 'rb') as file:
+                            reader = PdfReader(file)
+                            total_pages += len(reader.pages)
+                    except Exception as e:
+                        error_msg = f"无法打开PDF文件 '{os.path.basename(file_path)}': {str(e)}"
+                        self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
+                        raise Exception(f"文件 '{os.path.basename(file_path)}' 不是有效的PDF文件")
+                else:
+                    total_pages += 1
+            
+            self.parent.after(0, lambda: self.progress.config(maximum=total_pages))
+            processed_pages = 0
+            
+            for file_path in self.file_paths:
+                self.parent.after(0, lambda p=file_path: self.status_label.config(text=f"处理: {os.path.basename(p)}"))
                 
-                for page_num in range(len(doc)):
-                    page = doc.load_page(page_num)
-                    pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
-                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                if file_path.lower().endswith('.pdf'):
+                    try:
+                        doc = fitz.open(file_path)
+                    except Exception as e:
+                        error_msg = f"无法打开PDF文件 '{os.path.basename(file_path)}': {str(e)}"
+                        self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
+                        continue
+                    
+                    for page_num in range(len(doc)):
+                        page = doc.load_page(page_num)
+                        pix = page.get_pixmap(matrix=fitz.Matrix(300/72, 300/72))
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        
+                        pdf_bytes = io.BytesIO()
+                        img.convert('RGB').save(pdf_bytes, format='PDF', resolution=300, quality=100)
+                        pdf_bytes.seek(0)
+                        
+                        temp_reader = PdfReader(pdf_bytes)
+                        writer.add_page(temp_reader.pages[0])
+                        
+                        processed_pages += 1
+                        self.parent.after(0, lambda v=processed_pages: self.progress.config(value=v))
+                else:
+                    try:
+                        img = Image.open(file_path)
+                    except Exception as e:
+                        error_msg = f"无法打开图片文件 '{os.path.basename(file_path)}': {str(e)}"
+                        self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
+                        continue
                     
                     pdf_bytes = io.BytesIO()
                     img.convert('RGB').save(pdf_bytes, format='PDF', resolution=300, quality=100)
@@ -511,27 +569,10 @@ class MergePDFTab:
                     
                     processed_pages += 1
                     self.parent.after(0, lambda v=processed_pages: self.progress.config(value=v))
-            else:
-                try:
-                    img = Image.open(file_path)
-                except Exception as e:
-                    error_msg = f"无法打开图片文件 '{os.path.basename(file_path)}': {str(e)}"
-                    self.parent.after(0, lambda msg=error_msg: messagebox.showerror("错误", msg))
-                    continue
-                
-                pdf_bytes = io.BytesIO()
-                img.convert('RGB').save(pdf_bytes, format='PDF', resolution=300, quality=100)
-                pdf_bytes.seek(0)
-                
-                temp_reader = PdfReader(pdf_bytes)
-                writer.add_page(temp_reader.pages[0])
-                
-                processed_pages += 1
-                self.parent.after(0, lambda v=processed_pages: self.progress.config(value=v))
-        
-        with open(output_path, 'wb') as output_file:
-            writer.write(output_file)
-    
+            
+            with open(output_path, 'wb') as output_file:
+                writer.write(output_file)
+            
     def merge_manual_adjust(self, output_path):
         """根据手动设置合并文件"""
         writer = PdfWriter()
@@ -546,6 +587,7 @@ class MergePDFTab:
         margin_pt = margin_mm * 72 / 25.4
         
         is_landscape = self.page_orientation.get() == "横向"
+        is_mixed = self.page_orientation.get() == "混合"
         
         if page_size == "A4":
             if is_landscape:

@@ -7,9 +7,16 @@ import subprocess
 import sys
 import shutil
 
+# 导入版本号
+try:
+    from pdf_tool_gui import VERSION
+except ImportError:
+    VERSION = "v0.0.1"  # 如果导入失败，使用默认版本号
+
 def build_exe():
     """使用PyInstaller打包应用程序为EXE文件"""
     print("开始打包PDF工具为可执行文件...")
+    print(f"应用版本: {VERSION}")
 
     # 确保必要的依赖已安装
     required_packages = [
@@ -101,7 +108,7 @@ def build_exe():
     # 创建spec文件内容
     if use_icon:
         # 使用图标的spec配置
-        spec_content = """
+        spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
@@ -113,7 +120,7 @@ a = Analysis(
     datas=[],
     hiddenimports=['ttkthemes'],
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -130,7 +137,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='PDF工具',
+    name='PDF工具_{VERSION}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -148,7 +155,7 @@ exe = EXE(
 """
     else:
         # 不使用图标的spec配置
-        spec_content = """
+        spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
@@ -160,7 +167,7 @@ a = Analysis(
     datas=[],
     hiddenimports=['ttkthemes'],
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -177,7 +184,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='PDF工具',
+    name='PDF工具_{VERSION}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -210,10 +217,10 @@ exe = EXE(
         ])
         
         print("\n打包完成! 可执行文件已生成在dist目录中。")
-        print("您可以在dist文件夹中找到 'PDF工具.exe' 文件")
+        print(f"您可以在dist文件夹中找到 'PDF工具_{VERSION}.exe' 文件")
         
         # 检查是否成功创建了EXE文件
-        exe_path = os.path.join("dist", "PDF工具.exe")
+        exe_path = os.path.join("dist", f"PDF工具_{VERSION}.exe")
         if os.path.exists(exe_path):
             print(f"\n成功创建可执行文件: {os.path.abspath(exe_path)}")
             print(f"文件大小: {os.path.getsize(exe_path) / (1024*1024):.2f} MB")

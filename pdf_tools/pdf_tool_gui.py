@@ -9,6 +9,9 @@ import fitz  # PyMuPDF
 import io
 import sys
 
+# 应用版本号
+VERSION = "v0.0.1.20"
+
 # 尝试导入ttkthemes，如果不存在则使用标准主题
 try:
     from ttkthemes import ThemedTk, ThemedStyle
@@ -87,10 +90,11 @@ class BaseFileOperations:
 
 # 导入PDF压缩模块
 from modules.pdf_compressor import PDFCompressorTab
-
 from modules.pdf_merger import MergePDFTab
 from modules.pdf_to_image import PDFToImageTab
 from modules.image_convert import ImageConvertTab
+from modules.pdf_properties import PDFPropertiesTab  # 导入新的PDF属性查看模块
+from modules.pdf_resizer import PDFResizerTab  # 导入新的PDF页面尺寸转换模块
 
 class PDFToolGUI:
     """PDF工具箱主类"""
@@ -98,7 +102,7 @@ class PDFToolGUI:
     def __init__(self, root):
         self.root = root
         # 设置应用标题
-        self.root.title("高级PDF工具箱")
+        self.root.title(f"高级PDF工具箱 {VERSION}")
         self.root.geometry("950x720")
         
         # 尝试设置应用图标
@@ -130,13 +134,17 @@ class PDFToolGUI:
         self.merge_tab = MergePDFTab(self.notebook, self.theme_manager)
         self.pdf_to_image_tab = PDFToImageTab(self.notebook, self.theme_manager)
         self.image_convert_tab = ImageConvertTab(self.notebook, self.theme_manager)
-        self.pdf_compressor_tab = PDFCompressorTab(self.notebook)  # 新增PDF压缩标签页
+        self.pdf_compressor_tab = PDFCompressorTab(self.notebook)  # PDF压缩标签页
+        self.pdf_properties_tab = PDFPropertiesTab(self.notebook, self.theme_manager)  # PDF属性查看标签页
+        self.pdf_resizer_tab = PDFResizerTab(self.notebook, self.theme_manager)  # PDF页面尺寸转换标签页
         
         # 添加标签页到notebook
         self.notebook.add(self.merge_tab.frame, text="合并PDF和图片")
         self.notebook.add(self.pdf_to_image_tab.frame, text="PDF转图片")
         self.notebook.add(self.image_convert_tab.frame, text="图片格式转换")
-        self.notebook.add(self.pdf_compressor_tab.frame, text="PDF压缩")  # 修改这里，使用frame而不是parent
+        self.notebook.add(self.pdf_compressor_tab.frame, text="PDF压缩")
+        self.notebook.add(self.pdf_properties_tab.frame, text="PDF属性查看")
+        self.notebook.add(self.pdf_resizer_tab.frame, text="PDF页面尺寸转换")  # 添加PDF页面尺寸转换标签页
         
         self.notebook.pack(expand=1, fill="both", padx=15, pady=15)
         
