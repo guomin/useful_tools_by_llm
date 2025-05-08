@@ -10,7 +10,7 @@ import io
 import sys
 
 # 应用版本号
-VERSION = "v0.0.1.20"
+VERSION = "v0.0.1.21"
 
 # 尝试导入ttkthemes，如果不存在则使用标准主题
 try:
@@ -61,14 +61,13 @@ class UIThemeManager:
                       background=[('active', self.accent_color)],
                       foreground=[('active', 'white')])
                       
-        # 创建主操作按钮样式
+        # 创建主操作按钮样式 - 增强颜色区分度
         self.style.configure("Primary.TButton", 
-                           font=("Arial", 11, "bold"),
-                           background=self.accent_color, 
-                           foreground="white")
+                           font=("Arial", 11, "bold")
+                           )
         self.style.map("Primary.TButton", 
-                      background=[('active', '#2980b9')],
-                      foreground=[('active', 'white')])
+                      background=[('active', '#1a5276'), ('pressed', '#154360')],  # 使用更深的蓝色增强对比度
+                      foreground=[('pressed', '#f0f0f0')])  # 确保文本在所有状态下保持可见
 
 
 class BaseFileOperations:
