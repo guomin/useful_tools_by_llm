@@ -26,6 +26,7 @@ jobs:
           echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
       - name: Install dependencies
         run: |
+          cd pdf_tools
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Build target file
