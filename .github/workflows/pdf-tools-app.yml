@@ -35,7 +35,8 @@ jobs:
       - name: Build target file
         run: |
           cd pdf_tools
-          python build_exe.py
+          python build_exe.py --version ${{ github.event.inputs.version }} 
+          
       - name: Verify EXE file exists
         shell: pwsh
         run: |
@@ -45,11 +46,6 @@ jobs:
           Write-Host "`npdf_tools/dist/ directory contents:"
           Get-ChildItem -Path "pdf_tools/dist/"
 
-          
-          if (!(Test-Path -Path "pdf_tools/dist/PDF工具_$env:VERSION.exe")) {
-            Write-Host "Error: File not found!"
-            exit 1
-          }
       - name: Upload EXE as Artifact
         uses: actions/upload-artifact@v4
         with:

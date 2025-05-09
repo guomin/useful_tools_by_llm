@@ -1,20 +1,34 @@
 """
 打包PDF工具为EXE文件
 使用方法: 执行此脚本，将在dist目录下生成EXE文件
+命令行参数:
+  --version VERSION  指定版本号 (例如: --version v1.0.0)
 """
 import os
 import subprocess
 import sys
 import shutil
 import io
+import argparse
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
+# 解析命令行参数
+parser = argparse.ArgumentParser(description="打包PDF工具为EXE文件")
+parser.add_argument('--version', type=str, help="指定版本号")
+args = parser.parse_args()
+
 # 导入版本号
-try:
-    from pdf_tool_gui import VERSION
-except ImportError:
-    VERSION = "v0.0.1"  # 如果导入失败，使用默认版本号
+if args.version:
+    VERSION = args.version
+    print(f"使用命令行指定的版本号: {VERSION}")
+else:
+    try:
+        from pdf_tool_gui import VERSION
+        print(f"使用从模块导入的版本号: {VERSION}")
+    except ImportError:
+        VERSION = "v0.0.1"  # 如果导入失败，使用默认版本号
+        print(f"未找到版本号，使用默认版本: {VERSION}")
 
 def build_exe():
     """使用PyInstaller打包应用程序为EXE文件"""
