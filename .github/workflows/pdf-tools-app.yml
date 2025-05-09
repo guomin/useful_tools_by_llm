@@ -53,6 +53,10 @@ jobs:
           name: PDF工具_v0.0.1.20.exe
           path: pdf_tools/dist/PDF工具_v0.0.1.20.exe  # 修改为生成的 EXE 文件路径
 
+      - name: Debug GITHUB_TOKEN
+        run: |
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
