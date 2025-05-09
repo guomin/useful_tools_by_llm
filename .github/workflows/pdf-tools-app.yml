@@ -55,7 +55,7 @@ jobs:
 
       - name: Debug GITHUB_TOKEN
         run: |
-          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}
+          curl -H "Authorization: token secrets.GITHUBTOKEN"https://api.github.com/repos/{{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/{{ github.repository }}
 
       - name: Create Release
         id: create_release
@@ -66,7 +66,7 @@ jobs:
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Upload EXE to Release
         uses: actions/upload-release-asset@v1
