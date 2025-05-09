@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import shutil
+import io
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
