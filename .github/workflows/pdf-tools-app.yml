@@ -36,7 +36,7 @@ jobs:
         run: |
           cd pdf_tools
           python build_exe.py --version ${{ github.event.inputs.version }} 
-          
+
       - name: Verify EXE file exists
         shell: pwsh
         run: |
@@ -49,15 +49,15 @@ jobs:
       - name: Upload EXE as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PDF工具_${{ env.VERSION }}.exe
-          path: pdf_tools/dist/PDF工具_${{ env.VERSION }}.exe  # 修改为生成的 EXE 文件路径
+          name: PDF工具_${{ github.event.inputs.version }}.exe
+          path: pdf_tools/dist/PDF工具_${{ github.event.inputs.version }}.exe  # 修改为生成的 EXE 文件路径
 
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: ${{ env.VERSION }}  # 替换为实际的版本号
-          release_name: Release ${{ env.VERSION }}
+          tag_name: ${{ github.event.inputs.version }}  # 替换为实际的版本号
+          release_name: Release ${{ github.event.inputs.version }}
           draft: false
           prerelease: false
         env:
@@ -67,8 +67,8 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: pdf_tools/dist/PDF工具_${{ env.VERSION }}.exe  # 修改为生成的 EXE 文件路径
-          asset_name: PDF_Tools_${{ env.VERSION }}.exe
+          asset_path: pdf_tools/dist/PDF工具_${{ github.event.inputs.version }}.exe  # 修改为生成的 EXE 文件路径
+          asset_name: PDF_Tools_${{ github.event.inputs.version }}.exe
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
