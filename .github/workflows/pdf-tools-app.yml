@@ -71,3 +71,5 @@ jobs:
           asset_path: pdf_tools/dist/PDF工具_v0.0.1.20.exe  # 修改为生成的 EXE 文件路径
           asset_name: PDF工具_v0.0.1.20.exe
           asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
