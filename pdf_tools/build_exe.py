@@ -243,4 +243,11 @@ exe = EXE(
         return False
 
 if __name__ == "__main__":
+    import time
+    start_time = time.time()
     build_exe()
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"\n打包过程耗时: {elapsed_time:.2f}秒")
+    print("感谢使用PDF工具，祝您使用愉快！")
+

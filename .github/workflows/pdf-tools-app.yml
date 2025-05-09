@@ -4,11 +4,13 @@
 name: Python application - Windows Build
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
-
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号'
+        required: true
+        default: 'v0.0.1.21'
+        
 permissions:
   contents: write
 
@@ -24,6 +26,7 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "PYTHONIOENCODING=utf-8" >> $GITHUB_ENV
+          echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
       - name: Install dependencies
         run: |
           cd pdf_tools
@@ -43,22 +46,22 @@ jobs:
           Get-ChildItem -Path "pdf_tools/dist/"
 
           
-          if (!(Test-Path -Path "pdf_tools/dist/PDF工具_v0.0.1.20.exe")) {
+          if (!(Test-Path -Path "pdf_tools/dist/PDF工具_${{ env.VERSION }}.exe")) {
             Write-Host "Error: File not found!"
             exit 1
           }
       - name: Upload EXE as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PDF工具_v0.0.1.20.exe
-          path: pdf_tools/dist/PDF工具_v0.0.1.20.exe  # 修改为生成的 EXE 文件路径
+          name: PDF工具_${{ env.VERSION }}.exe
+          path: pdf_tools/dist/PDF工具_${{ env.VERSION }}.exe  # 修改为生成的 EXE 文件路径
 
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: v0.0.1.20  # 替换为实际的版本号
-          release_name: Release v0.0.1.20
+          tag_name: ${{ env.VERSION }}  # 替换为实际的版本号
+          release_name: Release ${{ env.VERSION }}
           draft: false
           prerelease: false
         env:
@@ -68,8 +71,8 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: pdf_tools/dist/PDF工具_v0.0.1.20.exe  # 修改为生成的 EXE 文件路径
-          asset_name: PDF_Tools_v0.0.1.20.exe
+          asset_path: pdf_tools/dist/PDF工具_${{ env.VERSION }}.exe  # 修改为生成的 EXE 文件路径
+          asset_name: PDF_Tools_${{ env.VERSION }}.exe
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
