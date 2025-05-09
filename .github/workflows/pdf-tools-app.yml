@@ -33,10 +33,17 @@ jobs:
         run: |
           cd pdf_tools
           python build_exe.py
+      - name: Verify EXE file exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path -Path "pdf_tools/dist/PDF工具_v0.0.1.21.exe")) {
+            Write-Host "Error: File not found!"
+            exit 1
+          }
       - name: Upload EXE as Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: my-tool-exe
+          name: PDF工具_v0.0.1.21.exe
           path: pdf_tools/dist/PDF工具_v0.0.1.21.exe  # 修改为生成的 EXE 文件路径
 
       - name: Create Release
