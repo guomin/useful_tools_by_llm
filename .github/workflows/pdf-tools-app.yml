@@ -41,7 +41,7 @@ jobs:
             exit 1
           }
       - name: Upload EXE as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3.1.2
         with:
           name: PDF工具_v0.0.1.21.exe
           path: pdf_tools/dist/PDF工具_v0.0.1.21.exe  # 修改为生成的 EXE 文件路径
