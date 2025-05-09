@@ -7,6 +7,8 @@ import subprocess
 import sys
 import shutil
 
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # 导入版本号
 try:
     from pdf_tool_gui import VERSION
